@@ -3,12 +3,7 @@
 //! The columns are recovered by position rather than by splitting on
 //! whitespace, so an empty cell, a right-aligned one and a ragged column
 //! anywhere in the row all come back as they went in, as does a last column
-//! with spaces in it. A dashed rule gives every column's width outright. Under
-//! a solid rule or none, the widths come from where the header's words start.
-//!
-//! Which columns are ragged, and under no rows which marker the table was
-//! written with, are not written down anywhere, so they are worked out: the
-//! answer kept is the one that lays the text out again exactly as it was.
+//! with spaces in it.
 
 use std::cmp::Reverse;
 use std::fmt;
@@ -41,38 +36,26 @@ impl std::error::Error for ParseError {}
 impl Table {
     /// Read a table back from text [`Table::render`] or a [`Stream`] wrote.
     ///
-    /// The style comes back with it, along with each column's width as a
-    /// [`Column::min_width`], so rendering what this returns gives back the
-    /// text it was read from. A [`Stream`] line whose cell overran its column is
-    /// the exception: the cells read back exactly, and a render widens the
-    /// column to fit them.
-    ///
-    /// A cell holding the missing placeholder reads back as missing, since the
-    /// two are written the same. Only the last column's cells can hold a
-    /// space, as [`Column::ragged`] says, and a label's words none.
-    ///
-    /// Some tables write the same bytes as another: an empty word inside a
-    /// stacked label writes nothing, and nor does an empty cell in a ragged
-    /// column or an empty last column. What comes back then is a table that
-    /// renders the same text, which need not be the one that wrote it.
-    ///
-    /// Rows that do not sit under the rule at all came from some other writer,
-    /// and are split on whitespace instead, the last column taking the rest of
-    /// the line.
+    /// The style and column widths come back with it, so the result renders
+    /// the text it came from, bar a [`Stream`] cell that overran its column.
+    /// A cell holding the placeholder reads back as missing, and a space reads
+    /// back only in the last column's cells.
     ///
     /// [`Stream`]: crate::Stream
     pub fn parse(text: &str) -> Result<Table, ParseError> {
         let raw: Vec<&str> = text.lines().collect();
         let chars: Vec<Vec<char>> = raw.iter().map(|l| l.chars().collect()).collect();
 
-        // what comes before the first row: the preamble, the header, the rule,
-        // and any `#` line written between the rule and the first row
+        // what comes before the first row: the preamble, the
+        // header, the rule, and any `#` line written between the
+        // rule and the first row
         let lead = raw
             .iter()
             .position(|l| !l.starts_with('#'))
             .unwrap_or(raw.len());
 
-        // the last rule-shaped line, since a preamble may draw one of its own
+        // the last rule-shaped line, since a preamble may draw one
+        // of its own
         let rule_at = (0..lead).rev().find(|&i| is_rule(raw[i]));
         let rule = match rule_at {
             Some(i) if raw[i].as_bytes().get(1) == Some(&b'-') => Rule::Solid,
@@ -80,11 +63,11 @@ impl Table {
             None => Rule::None,
         };
 
-        // the lines that could be header, bottom first: `#` lines directly
-        // above the rule, or under no rule the last run of them before the
-        // rows, stopping at a bare `#` or a `#=` line
-        // the line directly above a rule is header whatever it holds, since a
-        // header of empty labels is a bare `#` too
+        // the lines that could be header, bottom first: `#` lines
+        // directly above the rule, or under no rule the last run of
+        // them before the rows, stopping at a bare `#` or a `#=`
+        // line the line directly above a rule is header whatever it
+        // holds, since a header of empty labels is a bare `#` too
         let bottom = match rule_at {
             Some(i) => i
                 .checked_sub(1)
@@ -141,12 +124,13 @@ impl Table {
             trailing,
         };
 
-        // a row that does not open with two spaces was written under Absorb.
-        // otherwise either marker could have written the rows, since under
-        // Absorb a row whose first cell is empty or right-aligned opens with
-        // spaces too, so each is tried and the one that explains the text
-        // better is kept: Indent on a tie when every row is indented, and
-        // Absorb, the default, when there are no rows to say
+        // a row that does not open with two spaces was written
+        // under Absorb. otherwise either marker could have written
+        // the rows, since under Absorb a row whose first cell is
+        // empty or right-aligned opens with spaces too, so each is
+        // tried and the one that explains the text better is kept:
+        // Indent on a tie when every row is indented, and Absorb,
+        // the default, when there are no rows to say
         let rows = data.iter().any(|&i| !chars[i].is_empty());
         let markers: &[Marker] = match rows {
             true if !data.iter().all(|&i| opens_indented(&chars[i])) => &[Marker::Absorb],
@@ -163,18 +147,20 @@ impl Table {
         }
         let (reading, (score, ragged)) = solved.expect("at least one marker is tried");
 
-        // a stream's overrun reads right as plain, though a render widens it
+        // a stream's overrun reads right as plain, though a render
+        // widens it
         let ragged = match score.0 {
             true => ragged,
             false => vec![false; columns.len()],
         };
         let built = reading.build(&ragged);
 
-        // the search above settles nearly every table, and what settles it is
-        // the table laying out again as written. when it does not, every
-        // answer is tried in turn, fewest ragged columns first, for tables
-        // narrow enough that trying them all is cheap. text no answer
-        // reproduces, from some other writer, keeps the search's
+        // the search above settles nearly every table, and what
+        // settles it is the table laying out again as written. when
+        // it does not, every answer is tried in turn, fewest ragged
+        // columns first, for tables narrow enough that trying them
+        // all is cheap. text no answer reproduces, from some other
+        // writer, keeps the search's
         let settled = built
             .as_ref()
             .is_some_and(|(t, first)| *first == top && reproduces(t, &raw, *first));
@@ -188,9 +174,10 @@ impl Table {
             reason: "the header does not line up with the rule",
         })?;
 
-        // rows that do not sit under the rule even at its own widths, as a
-        // stream's overrun does, came from some other writer, and the most
-        // that can be done with them is to split them on whitespace
+        // rows that do not sit under the rule even at its own
+        // widths, as a stream's overrun does, came from some other
+        // writer, and the most that can be done with them is to
+        // split them on whitespace
         if !rows_as_ruled(&table, &raw, &data) {
             table.rows = data.iter().map(|&i| split(raw[i], &table)).collect();
         }
@@ -236,13 +223,22 @@ impl Table {
     }
 }
 
-/// How well an answer to which columns are ragged explains the text: whether
-/// the rows lay out again as written, and if not, how far along them the first
-/// column showing otherwise is; then how much of the header, from the bottom
-/// line up, cuts cleanly. Two answers can explain the same text, and then the
-/// likelier is the one asking less out of the ordinary: fewer plain columns
-/// wider than anything in them, which only a minimum width explains, and then
-/// fewer cells with a space in them.
+/// How well an answer to which columns are ragged explains the text.
+//
+// in order: whether the rows lay out again as written, and
+// if not, how far along them the first column showing
+// otherwise is; then how much of the header, from the
+// bottom line up, cuts cleanly. two answers can explain the
+// same text, and then the likelier is the one asking less
+// out of the ordinary: fewer plain columns wider than
+// anything in them, which only a minimum width explains,
+// and then fewer cells with a space in them
+//
+// some tables write the same bytes as another: an empty
+// word in a stacked label writes nothing, and nor does an
+// empty cell in a ragged column or an empty last column.
+// the answer kept then renders the same text, but need not
+// be the table that wrote it
 type Score = (bool, usize, usize, Reverse<usize>, Reverse<usize>);
 
 /// The text being read, with what is settled about it before anything is
@@ -327,8 +323,8 @@ impl Reading<'_> {
                 .map(|k| 1 + if ragged[k] { label(k) } else { widths[k] })
                 .sum();
 
-            // the marker is inside the span unless a ragged first column is
-            // counted at its label alone
+            // the marker is inside the span unless a ragged first
+            // column is counted at its label alone
             let open = match self.marker == Marker::Absorb && ragged[0] {
                 true => 0,
                 false => MARKER.len(),
@@ -350,8 +346,8 @@ impl Reading<'_> {
         let mut widths = self.header_widths(ragged);
 
         if self.rule == Rule::None {
-            // a row's span runs from where the row opens, which for a sole
-            // column under Absorb is two before its header word
+            // a row's span runs from where the row opens, which for a
+            // sole column under Absorb is two before its header word
             let behind = match n == 1 && self.marker == Marker::Absorb {
                 true => MARKER.len(),
                 false => 0,
@@ -466,9 +462,10 @@ impl Reading<'_> {
             }
         }
 
-        // a rule draws a ragged column at its label's width: a dashed rule
-        // each one, a solid rule in its span, which ends with the last column.
-        // the labels are only known once the whole header cuts
+        // a rule draws a ragged column at its label's width: a
+        // dashed rule each one, a solid rule in its span, which
+        // ends with the last column. the labels are only known once
+        // the whole header cuts
         let whole = header == (self.bottom - self.top + 1) * (n + 1);
         let ruled = !whole
             || (0..n).filter(|&k| ragged[k]).all(|k| match self.rule {
@@ -477,8 +474,8 @@ impl Reading<'_> {
                 Rule::None => true,
             });
 
-        // plain columns wider than their label and cells call for, which only
-        // a minimum width set by hand explains
+        // plain columns wider than their label and cells call for,
+        // which only a minimum width set by hand explains
         let laid = self.data_widths(ragged, &pieces);
         let slack = (0..n)
             .filter(|&k| !ragged[k])
@@ -496,7 +493,8 @@ impl Reading<'_> {
             })
             .count();
 
-        // cells with a space in them, which only the last column holds
+        // cells with a space in them, which only the last column
+        // holds
         let spaced = pieces
             .iter()
             .filter(|p| p[n - 1].text.contains(' '))
@@ -541,8 +539,9 @@ impl Reading<'_> {
             }
         }
 
-        // the bare `#` a render puts between a comment and the header is the
-        // format's, not the preamble's, and a render puts it back
+        // the bare `#` a render puts between a comment and the
+        // header is the format's, not the preamble's, and a render
+        // puts it back
         let mut preamble: Vec<String> = self.raw[..first_header]
             .iter()
             .map(|l| l.to_string())
@@ -577,11 +576,12 @@ impl Reading<'_> {
         let mut ragged = vec![false; n];
         let mut current = self.score(&ragged);
         while current != perfect {
-            // ragged columns whose words are empty on a line each move the
-            // rest of it by one, and it can take several at once before the
-            // line cuts any further, so sets of up to three are weighed
-            // together, the smaller and then the leftmost winning a tie. one
-            // column that explains everything ends the search early
+            // ragged columns whose words are empty on a line each move
+            // the rest of it by one, and it can take several at once
+            // before the line cuts any further, so sets of up to three
+            // are weighed together, the smaller and then the leftmost
+            // winning a tie. one column that explains everything ends
+            // the search early
             let mut best: Option<(Score, Reverse<usize>, Reverse<Vec<usize>>)> = None;
             'sizes: for size in 1..=MOST_AT_ONCE {
                 for set in subsets(&ragged, size) {
@@ -745,9 +745,11 @@ struct Piece {
     text: String,
     /// Padding came before the text, so the cell was right-aligned.
     right: bool,
-    /// The cell was not laid out at its column's width: it stopped short with
-    /// the next cell straight after it, or ran past. A ragged column does
-    /// both, and a stream's overrun does the second.
+    /// Whether the cell's width differs from its column's.
+    //
+    // it stopped short with the next cell straight after it,
+    // or ran past. a ragged column does both, and a stream's
+    // overrun does the second
     short: bool,
     /// How much of the line the last column took, padding and all.
     span: usize,
@@ -810,7 +812,8 @@ fn cut(line: &[char], mut pos: usize, widths: &[usize], ragged: &[bool]) -> Vec<
                 });
                 pos = end + 1;
             }
-            // a ragged cell, or one that overran: the text up to the next space
+            // a ragged cell, or one that overran: the text up to the
+            // next space
             false => {
                 let len = line[pos..].iter().take_while(|&&c| c != ' ').count();
                 pieces.push(Piece {
@@ -857,10 +860,12 @@ fn words(
     let mut pos = MARKER.len();
 
     for k in 0..n {
-        // the last column's word is the rest of the line, however wide, and a
-        // plain one is padded out to its width where the lines keep padding
+        // the last column's word is the rest of the line, however
+        // wide, and a plain one is padded out to its width where
+        // the lines keep padding
         if k + 1 == n {
-            // a label's words hold no spaces, in the last column as anywhere
+            // a label's words hold no spaces, in the last column as
+            // anywhere
             let rest: String = line.get(pos..).unwrap_or_default().iter().collect();
             if rest.starts_with(' ') && !rest.trim().is_empty() || rest.trim().contains(' ') {
                 return Err(k);
@@ -880,7 +885,8 @@ fn words(
         }
 
         if pos >= line.len() {
-            // where padding is kept, every column before the last is written
+            // where padding is kept, every column before the last is
+            // written
             if last.is_some_and(|l| l.keep) {
                 return Err(k);
             }
@@ -942,7 +948,8 @@ fn labels(header: &[Vec<String>], n: usize) -> (Vec<Vec<String>>, Stack) {
         })
         .collect();
 
-    // a label short of the header's depth says which end it hangs from
+    // a label short of the header's depth says which end it
+    // hangs from
     let top = spans
         .iter()
         .flatten()

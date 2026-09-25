@@ -44,10 +44,11 @@ fn main() {
         },
     ];
 
-    // the step names are known before anything runs, and so are the headings
-    // above the numbers, which is enough to size every column but not enough
-    // to be sure: a value wider than what we guessed still takes the room it
-    // needs, and only its own block shifts
+    // the step names are known before anything runs, and so are
+    // the headings above the numbers, which is enough to size
+    // every column but not enough to be sure: a value wider
+    // than what we guessed still takes the room it needs, and
+    // only its own block shifts
     let known = Schema::new(vec![Column::new("step"), Column::new("shard")]);
     let names: Vec<_> = blocks
         .iter()

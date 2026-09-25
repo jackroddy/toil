@@ -36,7 +36,8 @@ impl Format {
             Format::Scientific(places) => write!(out, "{n:.places$e}"),
         };
 
-        // writing to a String fails only if the allocator does, which aborts
+        // writing to a String fails only if the allocator does,
+        // which aborts
         written.expect("a String accepts everything written to it");
     }
 }
@@ -99,12 +100,8 @@ impl Column {
 
     /// Never pad this column, and rule it to the width of its label.
     ///
-    /// For a column whose width belongs to the row rather than to the table --
-    /// a command line, a comma-joined list, a name the rows around it repeat.
-    /// Everything after an unpadded column shifts with it, so those columns
-    /// line up only across rows whose ragged cells are the same width. A cell
-    /// carrying a space has to be in the last column, since a reader splitting
-    /// on whitespace cannot tell it from two cells.
+    /// The columns after it line up only across rows whose cells here are the
+    /// same width, and only in the last column may a cell hold a space.
     pub fn ragged(mut self) -> Column {
         self.ragged = true;
         self

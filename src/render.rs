@@ -10,10 +10,8 @@ use crate::style::{Marker, Rule, Trailing};
 /// What opens a data line, standing in for the [`MARKER`] above it.
 pub(crate) const INDENT: &str = "  ";
 
-/// How wide each column is written.
-///
-/// Held apart from the rows so that tables written at different moments can
-/// share one, which is what keeps blocks lined up under a header printed once.
+/// How wide each column is written, which tables written at different moments
+/// can share to line up under one header.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Widths(pub(crate) Vec<usize>);
 
@@ -135,6 +133,11 @@ impl Table {
             if !self.preamble.is_empty() {
                 out.push('\n');
             }
+
+            // a comment is written the same way as a header line,
+            // so without a bare `#` between them a reader could
+            // not tell a comment directly above the header from
+            // the top line of a stacked label
             if self
                 .preamble
                 .last()
@@ -179,11 +182,8 @@ impl Table {
 
 /// Whether a bare `#` has to go between `line`, the last line above the
 /// header, and the header itself.
-///
-/// A comment directly above a header is written the same way as a header line,
-/// so without the bare `#` a reader could not tell a comment from the top line
-/// of a stacked label. A `#=` line or a bare `#` already says where it ends.
 pub(crate) fn needs_separator(line: &str) -> bool {
+    // a `#=` line or a bare `#` already says where it ends
     line != "#" && !line.starts_with("#=")
 }
 
@@ -233,10 +233,11 @@ fn rule(schema: &Schema, widths: &Widths) -> String {
                 })
                 .collect();
 
-            // the marker takes the place of the first dashes rather than
-            // sitting in front of them, so the rule stays as wide as its
-            // column. a ragged first column has no width to give up, and its
-            // rule is its label's width however the marker is written
+            // the marker takes the place of the first dashes rather
+            // than sitting in front of them, so the rule stays as wide
+            // as its column. a ragged first column has no width to give
+            // up, and its rule is its label's width however the marker
+            // is written
             if schema.style.marker == Marker::Absorb
                 && !schema.is_ragged(0)
                 && let Some(first) = cells.first_mut()

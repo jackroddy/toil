@@ -38,8 +38,9 @@ fn blocks_written_apart_line_up_under_one_header() {
         "a header, a rule, and a row from each block"
     );
 
-    // the second block's step name is shorter, so without the floor its wall
-    // clock would close up a character to the left of the first block's
+    // the second block's step name is shorter, so without the
+    // floor its wall clock would close up a character to the
+    // left of the first block's
     assert_eq!(offset(lines[2], "1.50"), offset(lines[3], "9.25"));
 }
 
@@ -70,8 +71,9 @@ fn a_stream_writes_the_widths_it_was_given() {
 
     assert_eq!(offset(lines[2], "175.8"), Some(21));
 
-    // the long name overruns its column rather than widening it, because the
-    // lines above it have already gone out and cannot be widened to match
+    // the long name overruns its column rather than widening
+    // it, because the lines above it have already gone out and
+    // cannot be widened to match
     assert!(
         lines[3].starts_with("a-target-whose-name-runs-past-its-column 1.0"),
         "{}",

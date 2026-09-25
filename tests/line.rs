@@ -75,7 +75,8 @@ fn a_line_writes_what_a_row_would_have() {
         vec![V::T("burn"), V::M, V::N(-0.04), V::M, V::M, V::M],
         // a short row, which both paths fill out
         vec![V::T("done")],
-        // an empty cell mid-row, whose padding the trim has to reach past
+        // an empty cell mid-row, whose padding the trim has to
+        // reach past
         vec![V::T(""), V::T(""), V::T(""), V::T(""), V::T(""), V::T("")],
     ];
 

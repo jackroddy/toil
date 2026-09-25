@@ -10,11 +10,10 @@ use crate::style::Trailing;
 
 /// A table written as its rows arrive.
 ///
-/// The widths are settled when the stream is built and never revised, because
-/// a line already written cannot be widened. Give it
+/// The widths are fixed when the stream is built: give it
 /// [`Schema::widths`](crate::Schema::widths) when there is nothing to measure
-/// yet, or [`Schema::measure`](crate::Schema::measure) over whatever rows are
-/// already known. A cell wider than its column overruns it.
+/// yet, or [`Schema::measure`](crate::Schema::measure) over the rows already
+/// known. A cell wider than its column overruns it.
 pub struct Stream<W: Write> {
     schema: Schema,
     widths: Widths,
@@ -24,8 +23,9 @@ pub struct Stream<W: Write> {
     /// sit directly under.
     separate: bool,
 
-    /// Where a number is formatted before it is padded, kept so that a row of
-    /// them allocates nothing.
+    /// Where a number is formatted before it is padded.
+    //
+    // kept on the stream so a row of numbers allocates nothing
     scratch: String,
 
     out: W,
@@ -155,8 +155,10 @@ pub struct Line<'a, W: Write> {
     out: &'a mut W,
     i: usize,
 
-    /// Spaces the line has earned but not been given, held back so that a row
-    /// ending in padding can be trimmed once the last cell is known.
+    /// Spaces due before the next cell and not yet written.
+    //
+    // held back so a row ending in padding can be trimmed
+    // once the last cell is known
     pending: usize,
 }
 
@@ -179,8 +181,9 @@ impl<'a, W: Write> Line<'a, W> {
     pub fn num(&mut self, n: f64) -> std::io::Result<&mut Self> {
         let schema: &'a Schema = self.schema;
 
-        // the scratch comes out of the line for as long as the number is in
-        // it, since writing the cell takes the line itself
+        // the scratch comes out of the line for as long as the
+        // number is in it, since writing the cell takes the line
+        // itself
         let mut buf = std::mem::take(self.scratch);
         match schema.columns.get(self.i) {
             Some(column) => column.format.write(n, &mut buf),
@@ -241,8 +244,9 @@ impl<'a, W: Write> Line<'a, W> {
             self.pending += pad;
         }
 
-        // an empty cell writes nothing, so the spaces in front of it stay
-        // owed and a row of them can still be trimmed
+        // an empty cell writes nothing, so the spaces in front
+        // of it stay pending and a row of them can still be
+        // trimmed
         if !text.is_empty() {
             self.spaces()?;
             self.out.write_all(text)?;
@@ -256,7 +260,7 @@ impl<'a, W: Write> Line<'a, W> {
         Ok(())
     }
 
-    /// Pay out the spaces the line is owed.
+    /// Write the pending spaces.
     fn spaces(&mut self) -> std::io::Result<()> {
         const SPACES: [u8; 32] = [b' '; 32];
 

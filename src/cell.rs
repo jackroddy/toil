@@ -133,8 +133,9 @@ impl<T: Into<Cell>> From<Option<T>> for Cell {
     }
 }
 
-// note: only the floats reach `Format`. an integer has no precision to apply,
-// and routing one through f64 would round the large ones
+// note: only the floats reach `Format`. an integer has no
+//       precision to apply, and routing one through f64
+//       would round the large ones
 macro_rules! cell_from_num {
     ($($t:ty),*) => {$(
         impl From<$t> for Cell {

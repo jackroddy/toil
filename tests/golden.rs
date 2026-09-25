@@ -89,8 +89,9 @@ fn benchmark_analysis_table() {
     table.row(["a-long-one", "1"]);
     table.row(["b", "22"]);
 
-    // concat! rather than a continued literal, because the padding these cases
-    // are about is trailing whitespace, which a `\` continuation eats
+    // concat! rather than a continued literal, because the
+    // padding these cases are about is trailing whitespace,
+    // which a `\` continuation eats
     let expected = concat!(
         "# name       n \n",
         "# ---------- --\n",
@@ -291,10 +292,6 @@ fn pid_results_matrix() {
 /// `nail`'s hit table: a label split into words and stacked from the bottom,
 /// so the last word sits over the numbers, and an E-value in scientific
 /// notation.
-///
-/// `nail` leaves one further space at the end of each header line that its
-/// data lines do not have. That is an inconsistency in its writer rather than
-/// a property of the format, so this is its shape without it.
 #[test]
 fn nail_hit_table() {
     let schema = Schema::new(vec![
@@ -356,6 +353,10 @@ fn nail_hit_table() {
         ]);
     }
 
+    // nail leaves one more space at the end of each header
+    // line than its data lines carry, an inconsistency in its
+    // writer rather than a property of the format, so this is
+    // its shape without that space
     let expected = concat!(
         "#                                            target target query query       comp         cell \n",
         "# target                     query           start  end    start end   score bias evalue  frac \n",

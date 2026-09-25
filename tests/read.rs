@@ -294,16 +294,8 @@ impl Lcg {
     }
 }
 
-/// Random tables across every axis at once. A cell never holds the
-/// placeholder as text or starts or ends with a space, and only the last
-/// column's cells hold a space, since those are the cases where two tables
-/// write the same bytes. For the same reason a stacked label has no empty
-/// word, and under a solid rule or none every column has a label: an empty one
-/// leaves no mark in the header. The last column always has one, since an
-/// empty last column can be ruled zero wide, and then nothing of it is left.
-/// And a ragged column's cells are never empty: an empty one moves the rest of
-/// the row along by one, which a plain column can write the same way with a
-/// right-aligned cell.
+/// Random tables across every axis at once, short of the few whose bytes
+/// another table writes too.
 #[test]
 fn random_tables_read_back() {
     let mut rng = Lcg(7);
@@ -323,6 +315,11 @@ fn random_tables_read_back() {
             .map(|k| {
                 let depth = 1 + rng.below(3);
                 let words: Vec<String> = (0..depth)
+                    // only a lone label over a dashed rule, short of
+                    // the last column, may be empty: under a solid
+                    // rule or none an empty label leaves no mark, an
+                    // empty word in a stacked label writes nothing,
+                    // and an empty last column can be ruled zero wide
                     .map(|_| match rule == Rule::Dashes && depth == 1 && k + 1 < n {
                         true => rng.word(6),
                         false => rng.word(5) + "x",
@@ -356,11 +353,17 @@ fn random_tables_read_back() {
             for (k, &ragged) in raggeds.iter().enumerate() {
                 let (cell, text) = match rng.below(6) {
                     0 => (Cell::missing(), None),
+                    // a space only in the last column, and never at
+                    // either end of a cell, since a reader splitting
+                    // on whitespace cannot tell those from two cells
                     1 if k + 1 == n => {
                         let text = format!("{} {}", rng.word(4) + "y", rng.word(4) + "z");
                         (Cell::from(text.clone()), Some(text))
                     }
                     _ => {
+                        // an empty ragged cell moves the rest of the
+                        // row along by one, which a plain column can
+                        // write the same way with a right-aligned cell
                         let text = match ragged {
                             true => rng.word(8) + "w",
                             false => rng.word(9),

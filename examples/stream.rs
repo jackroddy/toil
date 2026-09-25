@@ -2,7 +2,7 @@
 //!
 //! [`Stream`] takes its widths once and keeps them, because a line already on
 //! its way to stdout cannot be widened to match a later one. So the widths are
-//! an argument, and there are two honest answers to it.
+//! an argument, and there are two answers to it.
 //!
 //! Ask the schema and you get the header's own widths, which is all that is
 //! known before the first row arrives -- and which the first row is then very
