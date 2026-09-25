@@ -17,6 +17,9 @@ pub enum Align {
 enum Value {
     Text(String),
     Num(f64),
+    Num32(f32),
+    Int(i64),
+    Uint(u64),
     Missing,
 }
 
@@ -44,17 +47,37 @@ impl Cell {
 
     pub(crate) fn resolve(self, column: &Column, style: &Style) -> Text {
         let missing = self.value == Value::Missing;
+        let align = self.align.unwrap_or(column.align);
         let text = match self.value {
             Value::Text(text) => text,
-            Value::Num(n) => column.format.apply(n),
-            Value::Missing => style.missing.clone(),
+            _ => {
+                let mut text = String::new();
+                self.write(column, style, &mut text);
+                text
+            }
         };
 
         Text {
             text,
-            align: self.align.unwrap_or(column.align),
+            align,
             missing,
         }
+    }
+
+    /// Write the cell's text into `out`, and give back the side it is padded
+    /// on.
+    pub(crate) fn write(&self, column: &Column, style: &Style, out: &mut String) -> Align {
+        out.clear();
+        match &self.value {
+            Value::Text(text) => out.push_str(text),
+            Value::Num(n) => column.format.write(*n, out),
+            Value::Num32(n) => column.format.write(*n, out),
+            Value::Int(n) => write_int(*n, out),
+            Value::Uint(n) => write_int(*n, out),
+            Value::Missing => out.push_str(&style.missing),
+        }
+
+        self.align.unwrap_or(column.align)
     }
 }
 
@@ -133,28 +156,44 @@ impl<T: Into<Cell>> From<Option<T>> for Cell {
     }
 }
 
+impl From<f64> for Cell {
+    fn from(n: f64) -> Cell {
+        Cell {
+            value: Value::Num(n),
+            align: None,
+        }
+    }
+}
+
+// kept apart from f64, since widening first would write
+// 0.1f32 as 0.10000000149011612 under `Format::Plain`
+impl From<f32> for Cell {
+    fn from(n: f32) -> Cell {
+        Cell {
+            value: Value::Num32(n),
+            align: None,
+        }
+    }
+}
+
 // note: only the floats reach `Format`. an integer has no
 //       precision to apply, and routing one through f64
 //       would round the large ones
-macro_rules! cell_from_num {
-    ($($t:ty),*) => {$(
-        impl From<$t> for Cell {
-            fn from(n: $t) -> Cell {
-                Cell { value: Value::Num(n as f64), align: None }
-            }
-        }
-    )*};
-}
-
 macro_rules! cell_from_int {
-    ($($t:ty),*) => {$(
+    ($variant:ident, $wide:ty: $($t:ty),*) => {$(
         impl From<$t> for Cell {
             fn from(n: $t) -> Cell {
-                Cell { value: Value::Text(n.to_string()), align: None }
+                Cell { value: Value::$variant(n as $wide), align: None }
             }
         }
     )*};
 }
 
-cell_from_num!(f32, f64);
-cell_from_int!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
+cell_from_int!(Uint, u64: u8, u16, u32, u64, usize);
+cell_from_int!(Int, i64: i8, i16, i32, i64, isize);
+
+fn write_int(n: impl std::fmt::Display, out: &mut String) {
+    use std::fmt::Write;
+
+    write!(out, "{n}").expect("a String accepts everything written to it");
+}

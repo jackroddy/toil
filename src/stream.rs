@@ -165,7 +165,7 @@ pub struct Line<'a, W: Write> {
 impl<'a, W: Write> Line<'a, W> {
     /// Write a cell's text.
     pub fn text(&mut self, text: &str) -> std::io::Result<&mut Self> {
-        self.cell(text.as_bytes(), text.chars().count())?;
+        self.put(text.as_bytes(), text.chars().count(), None)?;
         Ok(self)
     }
 
@@ -173,7 +173,7 @@ impl<'a, W: Write> Line<'a, W> {
     ///
     /// Padding is by length, so this is for text of one byte per character.
     pub fn bytes(&mut self, text: &[u8]) -> std::io::Result<&mut Self> {
-        self.cell(text, text.len())?;
+        self.put(text, text.len(), None)?;
         Ok(self)
     }
 
@@ -190,7 +190,25 @@ impl<'a, W: Write> Line<'a, W> {
             None => buf.clear(),
         }
 
-        let written = self.cell(buf.as_bytes(), buf.len());
+        let written = self.put(buf.as_bytes(), buf.len(), None);
+        *self.scratch = buf;
+
+        written?;
+        Ok(self)
+    }
+
+    /// Write a cell of any kind, as [`Stream::row`] would write it.
+    pub fn cell(&mut self, cell: impl Into<Cell>) -> std::io::Result<&mut Self> {
+        let schema: &'a Schema = self.schema;
+        let Some(column) = schema.columns.get(self.i) else {
+            return Ok(self);
+        };
+
+        let cell = cell.into();
+        let mut buf = std::mem::take(self.scratch);
+        let align = cell.write(column, &schema.style, &mut buf);
+
+        let written = self.put(buf.as_bytes(), buf.chars().count(), Some(align));
         *self.scratch = buf;
 
         written?;
@@ -202,7 +220,7 @@ impl<'a, W: Write> Line<'a, W> {
         let schema: &'a Schema = self.schema;
         let missing = schema.style.missing.as_str();
 
-        self.cell(missing.as_bytes(), missing.chars().count())?;
+        self.put(missing.as_bytes(), missing.chars().count(), None)?;
         Ok(self)
     }
 
@@ -219,7 +237,8 @@ impl<'a, W: Write> Line<'a, W> {
         self.out.write_all(b"\n")
     }
 
-    fn cell(&mut self, text: &[u8], width: usize) -> std::io::Result<()> {
+    /// Write one cell's text, padded on `align`'s side or else its column's.
+    fn put(&mut self, text: &[u8], width: usize, align: Option<Align>) -> std::io::Result<()> {
         if self.i >= self.schema.columns.len() {
             return Ok(());
         }
@@ -239,7 +258,7 @@ impl<'a, W: Write> Line<'a, W> {
                 .saturating_sub(width),
         };
 
-        let align = self.schema.columns[self.i].align;
+        let align = align.unwrap_or(self.schema.columns[self.i].align);
         if align == Align::Right {
             self.pending += pad;
         }

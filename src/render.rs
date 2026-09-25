@@ -67,6 +67,11 @@ impl Table {
         }
     }
 
+    /// The columns, and the style they are written in.
+    pub fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
     /// Add a `#` line above the header, for a reader.
     pub fn comment(&mut self, line: impl Display) -> &mut Table {
         self.preamble.push(format!("#{}", space(line)));

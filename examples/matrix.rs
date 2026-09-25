@@ -8,10 +8,10 @@
 
 use toil::{Align, Cell, Column, Rule, Schema, Stack, Style, Table, Trailing};
 
-/// A run's name, as the header stacks it: the search mode, then whatever the
-/// run's own name is separated by.
-fn run(mode: &str, name: &str) -> Column {
-    let mut words = vec![mode.to_string()];
+/// A run's name, as the header stacks it: the device, then each part of the
+/// run's own name.
+fn run(device: &str, name: &str) -> Column {
+    let mut words = vec![device.to_string()];
     words.extend(name.split('-').map(str::to_string));
 
     Column::stacked(words).min_width(6).fixed(1)
@@ -25,15 +25,15 @@ fn main() {
     ];
 
     let runs = [
-        ("prf", "blast"),
-        ("prf", "hmmer"),
-        ("prf", "mmseqs-s7.5-ms2000"),
-        ("prf", "nail-s7.5-ms2000"),
-        ("seq", "diamond-ultra-sensitive"),
-        ("seq", "last"),
-        ("seq", "nail-s14.0-ms2000"),
+        ("cpu", "baseline"),
+        ("cpu", "cached"),
+        ("cpu", "cached-batch-64"),
+        ("cpu", "cached-batch-256"),
+        ("gpu", "fused-half-precision"),
+        ("gpu", "baseline"),
+        ("gpu", "fused-batch-256"),
     ];
-    columns.extend(runs.iter().map(|&(mode, name)| run(mode, name)));
+    columns.extend(runs.iter().map(|&(device, name)| run(device, name)));
 
     let schema = Schema::new(columns).style(
         Style::default()

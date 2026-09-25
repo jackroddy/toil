@@ -20,14 +20,8 @@ pub enum Format {
 }
 
 impl Format {
-    pub(crate) fn apply(self, n: f64) -> String {
-        let mut out = String::new();
-        self.write(n, &mut out);
-        out
-    }
-
     /// Write `n` out against this format, into a buffer the caller keeps.
-    pub(crate) fn write(self, n: f64, out: &mut String) {
+    pub(crate) fn write(self, n: impl std::fmt::Display + std::fmt::LowerExp, out: &mut String) {
         out.clear();
 
         let written = match self {
@@ -153,14 +147,23 @@ impl From<&String> for Column {
 pub struct Schema {
     pub(crate) columns: Vec<Column>,
     pub(crate) style: Style,
+
+    /// Each column's label words, joined by a space.
+    pub(crate) labels: Vec<String>,
 }
 
 impl Schema {
     /// These columns, in the default style.
     pub fn new(columns: impl IntoIterator<Item = impl Into<Column>>) -> Schema {
+        let columns: Vec<Column> = columns.into_iter().map(Into::into).collect();
+        let labels = columns
+            .iter()
+            .map(|column| column.label.join(" "))
+            .collect();
         Schema {
-            columns: columns.into_iter().map(Into::into).collect(),
+            columns,
             style: Style::default(),
+            labels,
         }
     }
 

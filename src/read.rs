@@ -43,6 +43,12 @@ impl Table {
     ///
     /// [`Stream`]: crate::Stream
     pub fn parse(text: &str) -> Result<Table, ParseError> {
+        Table::parse_missing(text, &Style::default().missing)
+    }
+
+    /// Read a table back as [`parse`](Self::parse) does, from text written
+    /// with `missing` as its [placeholder](Style::missing).
+    pub fn parse_missing(text: &str, missing: &str) -> Result<Table, ParseError> {
         let raw: Vec<&str> = text.lines().collect();
         let chars: Vec<Vec<char>> = raw.iter().map(|l| l.chars().collect()).collect();
 
@@ -122,6 +128,7 @@ impl Table {
             data: &data,
             marker: Marker::Absorb,
             trailing,
+            missing,
         };
 
         // a row that does not open with two spaces was written
@@ -189,8 +196,15 @@ impl Table {
     ///
     /// Text that is not a table fails as [`std::io::ErrorKind::InvalidData`].
     pub fn read(path: impl AsRef<Path>) -> std::io::Result<Table> {
+        Table::read_missing(path, &Style::default().missing)
+    }
+
+    /// Read the table at `path`, as [`parse_missing`](Self::parse_missing)
+    /// reads text.
+    pub fn read_missing(path: impl AsRef<Path>, missing: &str) -> std::io::Result<Table> {
         let text = std::fs::read_to_string(path)?;
-        Table::parse(&text).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        Table::parse_missing(&text, missing)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
     /// The lines above the header, `#` and all.
@@ -204,17 +218,27 @@ impl Table {
     }
 
     /// Each column's label, a stacked one's words joined by a space.
-    pub fn labels(&self) -> Vec<String> {
-        self.schema
-            .columns
+    pub fn labels(&self) -> &[String] {
+        &self.schema.labels
+    }
+
+    /// The text of each `#=` line above the header, without the `#=`.
+    pub fn meta_lines(&self) -> impl Iterator<Item = &str> {
+        self.preamble
             .iter()
-            .map(|column| column.label.join(" "))
-            .collect()
+            .filter_map(|line| line.strip_prefix("#="))
+            .map(|text| text.strip_prefix(' ').unwrap_or(text))
     }
 
     /// Which column carries `label`, as [`labels`](Self::labels) spells it.
     pub fn index(&self, label: &str) -> Option<usize> {
-        self.labels().iter().position(|l| l == label)
+        self.schema.labels.iter().position(|l| l == label)
+    }
+
+    /// The text of row `row` under `label`, or `None` where there is no such
+    /// row or column or the cell holds no value.
+    pub fn get(&self, row: usize, label: &str) -> Option<&str> {
+        self.rows.get(row)?.get(self.index(label)?)
     }
 
     /// The rows, in the order they were added or read.
@@ -261,6 +285,7 @@ struct Reading<'a> {
     data: &'a [usize],
     marker: Marker,
     trailing: Trailing,
+    missing: &'a str,
 }
 
 impl Reading<'_> {
@@ -273,6 +298,7 @@ impl Reading<'_> {
             .marker(self.marker)
             .rule(self.rule)
             .trailing(self.trailing)
+            .missing(self.missing)
     }
 
     fn keep(&self) -> bool {

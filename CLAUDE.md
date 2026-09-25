@@ -106,8 +106,8 @@ cases the writer being copied is inconsistent with itself:
 
 Neither is a property of the format, and `toil` has no mode for either.
 
-`examples/` has five runnable programs, one per shape: `run_summary`,
-`analysis`, `blocks` (the shared floor, arriving a block at a time),
+`examples/` has five runnable programs, one per shape: `read` (cells by label,
+the `#=` lines, and appending to what was read), `analysis`, `blocks` (the shared floor, arriving a block at a time),
 `stream` (header-sized widths against batch-measured ones), and `matrix`.
 
 ## The four implementations

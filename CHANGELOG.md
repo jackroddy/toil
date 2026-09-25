@@ -19,3 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Widths`, so tables written at different times can line up under one header.
 - `Table::parse` and `Table::read`, which turn text the crate wrote back into a
   `Table` that renders the same bytes.
+- `Table::parse_missing` and `Table::read_missing`, for a table written with a
+  placeholder other than `-`.
+- `Table::get`, for a cell by row and label, and `Table::meta_lines`, for the
+  text of the `#=` lines.
+- `Table::schema`, so a table read back can be handed to `Stream::continued`
+  and appended to.
+- `Line::cell`, which writes any `Cell` into a stream line, integers and
+  `Option`s included, and honours a cell's own alignment.
