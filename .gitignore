@@ -1,0 +1,8 @@
+target/
+tmp-claude/
+Cargo.lock
+
+# read-only reference checkouts, not part of this crate
+/nail
+/pail
+/nail-benchmarks

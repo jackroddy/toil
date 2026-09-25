@@ -1,0 +1,14 @@
+[package]
+name = "toil"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jack Roddy <jack.w.roddy@gmail.com>"]
+repository = "https://github.com/jackroddy/toil"
+license = "MIT OR Apache-2.0"
+description = "Write and read tables."
+categories = ["text-processing"]
+keywords = ["table", "tabular", "align", "format"]
+readme = "README.md"
+exclude = ["CLAUDE.md"]
+
+[dependencies]
