@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-25
+
 ### Added
 
 - `Table`, which holds every row and lays them out once, and `Stream`, which
@@ -27,3 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and appended to.
 - `Line::cell`, which writes any `Cell` into a stream line, integers and
   `Option`s included, and honours a cell's own alignment.
+
+[Unreleased]: https://github.com/jackroddy/toil/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jackroddy/toil/releases/tag/v0.1.0
