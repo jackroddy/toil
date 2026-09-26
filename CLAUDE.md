@@ -297,6 +297,10 @@ Settled 2026-09-07. Full design in
   Rows that do not sit under the rule even at its own widths are split on
   whitespace. That is for other writers: michi's manifest drifts a column off
   its rule in places, and nail-benchmarks reads it through `Table::parse`.
-- **Zero dependencies**, and rendering has no error type: it is infallible and
+- **Dependencies are allowed.** The crate started with none. Since 2026-09-25
+  Jack allows them where they earn their place, starting with `wide` for
+  portable SIMD in the reader. Still prefer the standard library when it
+  does the job about as well.
+- **Rendering has no error type**: it is infallible and
   returns `String`, and only `write` returns `io::Result`. Reading has one,
   `ParseError`, and `Table::read` hands it back as `io::ErrorKind::InvalidData`.
