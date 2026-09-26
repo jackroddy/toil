@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::cell::{Align, Cell, Row, Text};
 use crate::column::{MARKER, Schema};
+use crate::meta;
 use crate::style::{Marker, Rule, Trailing};
 
 /// What opens a data line, standing in for the [`MARKER`] above it.
@@ -78,9 +79,18 @@ impl Table {
         self
     }
 
-    /// Add a `#=` line above the header, for a parser.
-    pub fn meta(&mut self, line: impl Display) -> &mut Table {
-        self.preamble.push(format!("#={}", space(line)));
+    /// Add a `#=` line above the header, for a parser: `key` and then
+    /// `words`, which read back through [`meta_rows`](Self::meta_rows).
+    ///
+    /// A word with no value, or an empty one, is written as the placeholder.
+    /// Only the last word may hold a space.
+    pub fn meta(
+        &mut self,
+        key: &str,
+        words: impl IntoIterator<Item = impl Into<Cell>>,
+    ) -> &mut Table {
+        let line = meta::line(key, words, &self.schema.style.missing);
+        self.preamble.push(line);
         self
     }
 

@@ -1,5 +1,5 @@
-//! Reading a table back: its cells by label, its `#=` lines, and enough of
-//! its shape to go on writing it.
+//! Reading a table back: its cells by label, its `#=` lines as a key and
+//! words, and enough of its shape to go on writing it.
 //!
 //! The text here is a string, and [`Table::read`] does the same from a file.
 //! A table too long to hold whole goes through a [`Reader`] instead, a line
@@ -19,8 +19,8 @@ fn main() -> std::io::Result<()> {
     .style(Style::default().rule(Rule::None));
 
     let mut table = Table::new(schema);
-    table.meta("units celsius mm");
-    table.meta("day 2026-09-25");
+    table.meta("units", ["celsius", "mm"]);
+    table.meta("day", ["2026-09-25"]);
     for (city, high, low, rain) in [
         ("Lisbon", 21.4, 13.0, Some(2)),
         ("Oslo", 11.9, 4.2, Some(14)),
@@ -49,8 +49,8 @@ fn main() -> std::io::Result<()> {
     ])?;
 
     writeln!(out)?;
-    for line in back.meta_lines() {
-        writeln!(out, "meta: {line}")?;
+    for meta in back.meta_rows() {
+        writeln!(out, "{}: {}", meta.key(), meta.rest(0).unwrap_or(""))?;
     }
     for row in 0..back.rows().len() {
         let city = back.get(row, "city").unwrap_or("?");

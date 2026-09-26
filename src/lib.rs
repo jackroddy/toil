@@ -71,6 +71,7 @@
 
 mod cell;
 mod column;
+mod meta;
 mod read;
 mod reader;
 mod render;
@@ -79,6 +80,7 @@ mod style;
 
 pub use cell::{Align, Cell, Row};
 pub use column::{Column, Format, Schema};
+pub use meta::MetaRow;
 pub use read::ParseError;
 pub use reader::{Cells, Entry, Reader};
 pub use render::{Header, Table, Widths};

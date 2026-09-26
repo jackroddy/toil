@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `MetaRow`, a `#=` line read as a key and the words after it: `get` for one
+  word, `exactly` for a fixed number of them, and `rest` for the text from a
+  word to the end of the line. A word holding the placeholder reads as
+  missing.
+- `Table::meta_rows`, for every `#=` line above the header and between the
+  rows, in the order they were written.
+- `Entry::Meta`, for a `#=` line the `Reader` finds between the rows.
+
+### Changed
+
+- `Table::meta` and `Stream::meta` take a key and its words in place of one
+  string: `meta("tool", [name, version])` where it was
+  `meta(format!("tool {name} {version}"))`. Each word goes through
+  `Into<Cell>`, and a missing or empty word writes the placeholder. The
+  bytes written are the same.
+- `Entry::Comment` now holds only plain `#` lines, since a `#=` line comes
+  back as `Entry::Meta`.
+
+### Removed
+
+- `Table::meta_lines`, which `Table::meta_rows` replaces.
+
 ## [0.1.1] - 2026-09-25
 
 ### Added

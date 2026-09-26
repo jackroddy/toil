@@ -34,9 +34,9 @@ fn main() {
     table.comment("target      1000 seqs            194987 residues        220417 bytes");
     table.comment("pairs        261 rows                 3 runs");
     table.comment("");
-    table.meta("run hmmer hmmer 0.2600");
-    table.meta("run nail nail 0.1200 E=1000000");
-    table.meta("run mmseqs mmseqs 0.4100 s=7.5");
+    table.meta("run", ["hmmer", "hmmer", "0.2600"]);
+    table.meta("run", ["nail", "nail", "0.1200", "E=1000000"]);
+    table.meta("run", ["mmseqs", "mmseqs", "0.4100", "s=7.5"]);
 
     let runs = [
         ("hmmer", "hmmer", None, 0.26, 43, 43, 1.0, ""),

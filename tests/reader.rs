@@ -42,12 +42,15 @@ fn written() -> Vec<u8> {
     let schema = schema();
     let widths = schema.widths();
     let mut out = Stream::new(schema, widths, Vec::new());
-    out.meta("format runs 1").unwrap();
+    out.meta("format", ["runs", "1"]).unwrap();
     out.header().unwrap();
 
     for r in 0..1000 {
         if r % 250 == 0 {
-            out.meta(format!("shard {}", r / 250)).unwrap();
+            out.meta("shard", [r / 250]).unwrap();
+        }
+        if r == 500 {
+            out.comment("halfway").unwrap();
         }
         let cells = row(r);
         let mut line = out.line().unwrap();
@@ -59,7 +62,7 @@ fn written() -> Vec<u8> {
         }
         line.end().unwrap();
     }
-    out.meta("end 1000").unwrap();
+    out.meta("end", [1000]).unwrap();
     out.into_inner()
 }
 
@@ -70,7 +73,10 @@ fn every_row_reads_back_past_the_sample() {
 
     let mut reader = Reader::new(text.as_slice()).unwrap();
     let header = reader.header();
-    assert_eq!(header.meta_lines().collect::<Vec<_>>(), ["format runs 1"]);
+    let format: Vec<_> = header.meta_rows().collect();
+    assert_eq!(format.len(), 1);
+    assert_eq!(format[0].key(), "format");
+    assert_eq!(format[0].exactly(), Some([Some("runs"), Some("1")]));
     assert_eq!(header.index("run two"), Some(4));
 
     let mut r = 0;
@@ -78,6 +84,12 @@ fn every_row_reads_back_past_the_sample() {
     while let Some((number, entry)) = reader.next_entry().unwrap() {
         let at = lines[number - 1];
         match entry {
+            Entry::Meta(meta) => {
+                let [n] = meta.exactly().expect("one word");
+                let n: usize = n.unwrap().parse().unwrap();
+                assert_eq!(at, format!("#= {} {n}", meta.key()).as_bytes());
+                comments.push(format!("{} {n}", meta.key()));
+            }
             Entry::Comment(line) => {
                 assert_eq!(line.as_bytes(), at);
                 comments.push(line.to_string());
@@ -98,11 +110,12 @@ fn every_row_reads_back_past_the_sample() {
     assert_eq!(
         comments,
         [
-            "#= shard 0",
-            "#= shard 1",
-            "#= shard 2",
-            "#= shard 3",
-            "#= end 1000"
+            "shard 0",
+            "shard 1",
+            "shard 2",
+            "# halfway",
+            "shard 3",
+            "end 1000"
         ]
     );
 }
@@ -121,7 +134,7 @@ fn a_row_is_bytes_and_a_comment_is_text() {
     loop {
         match reader.next_entry() {
             Ok(Some((_, Entry::Row(cells)))) => seen |= cells.field(0) == Some(b"q\xFF00"),
-            Ok(Some((_, Entry::Comment(_)))) => {}
+            Ok(Some((_, Entry::Meta(_) | Entry::Comment(_)))) => {}
             Ok(None) => panic!("the comment read as text"),
             Err(e) => {
                 assert_eq!(e.kind(), ErrorKind::InvalidData);

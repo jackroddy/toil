@@ -5,6 +5,7 @@ use std::io::Write;
 
 use crate::cell::{Align, Cell, Row};
 use crate::column::Schema;
+use crate::meta;
 use crate::render::{Widths, data_open, head, line, needs_separator, space};
 use crate::style::Trailing;
 
@@ -67,10 +68,16 @@ impl<W: Write> Stream<W> {
         writeln!(self.out, "{line}")
     }
 
-    /// Write a `#=` line, for a parser.
-    pub fn meta(&mut self, line: impl Display) -> std::io::Result<()> {
+    /// Write a `#=` line, for a parser, as [`Table::meta`](crate::Table::meta)
+    /// adds one.
+    pub fn meta(
+        &mut self,
+        key: &str,
+        words: impl IntoIterator<Item = impl Into<Cell>>,
+    ) -> std::io::Result<()> {
         self.separate = false;
-        writeln!(self.out, "#={}", space(line))
+        let line = meta::line(key, words, &self.schema.style.missing);
+        writeln!(self.out, "{line}")
     }
 
     /// Write the header now, if it has not gone out already.

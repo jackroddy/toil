@@ -33,12 +33,33 @@ fn read_alike(text: &str, back: &Table, context: &str) {
                     })
                     .collect::<Vec<_>>(),
             ),
+            Entry::Meta(meta) => {
+                let mut line = String::from("#=");
+                for part in [Some(meta.key()), meta.rest(0)].into_iter().flatten() {
+                    if !part.is_empty() {
+                        line.push(' ');
+                        line.push_str(part);
+                    }
+                }
+                comments.push((rows.len(), line));
+            }
             Entry::Comment(line) => comments.push((rows.len(), line.to_string())),
         }
     }
 
+    // a `#=` line comes back as its key and words, which
+    // spell the line again but for spaces at either end
+    let written: Vec<(usize, String)> = back
+        .interludes()
+        .iter()
+        .map(|(at, line)| match line.starts_with("#=") {
+            true => (*at, line.trim_end().to_string()),
+            false => (*at, line.clone()),
+        })
+        .collect();
+
     assert_eq!(rows, cells(back), "{context}");
-    assert_eq!(comments, back.interludes(), "{context}");
+    assert_eq!(comments, written, "{context}");
 }
 
 fn cells(table: &Table) -> Vec<Vec<Option<String>>> {
@@ -79,6 +100,55 @@ fn what_render_wrote_parses_back() {
         back.rows()[1].get(back.index("wall(s)").unwrap()),
         Some("22.00")
     );
+}
+
+#[test]
+fn meta_rows_read_back_what_meta_wrote() {
+    let mut table = Table::new(Schema::new(["run", "shard"]));
+    table.meta("tool", ["nail", "0.4.1", "a1b2c3"]);
+    table.meta("tool", ["hmmer", "3.4", ""]);
+    table.meta("failed", [Some("seed-3"), None]);
+    table.meta("imported", ["dealt before set.tbl existed; see the ledger"]);
+    table.meta("rows", [1200u64]);
+    table.row(["seed-1", "0"]);
+    table.interlude("#= end 1");
+
+    let text = table.render();
+    assert!(text.starts_with(concat!(
+        "#= tool nail 0.4.1 a1b2c3\n",
+        "#= tool hmmer 3.4 -\n",
+        "#= failed seed-3 -\n",
+        "#= imported dealt before set.tbl existed; see the ledger\n",
+        "#= rows 1200\n",
+    )));
+
+    let back = Table::parse(&text).unwrap();
+    let meta: Vec<_> = back.meta_rows().collect();
+    let keys: Vec<_> = meta.iter().map(|m| m.key()).collect();
+    assert_eq!(keys, ["tool", "tool", "failed", "imported", "rows", "end"]);
+
+    let tools: Vec<_> = meta
+        .iter()
+        .filter(|m| m.key() == "tool")
+        .map(|m| m.exactly::<3>())
+        .collect();
+    assert_eq!(
+        tools,
+        [
+            Some([Some("nail"), Some("0.4.1"), Some("a1b2c3")]),
+            Some([Some("hmmer"), Some("3.4"), None]),
+        ]
+    );
+    assert_eq!(meta[0].exactly::<2>(), None);
+    assert_eq!(meta[2].exactly(), Some([Some("seed-3"), None]));
+    assert_eq!(
+        meta[3].rest(0),
+        Some("dealt before set.tbl existed; see the ledger")
+    );
+    assert_eq!(meta[3].get(1), Some("before"));
+    assert_eq!(meta[3].rest(5), Some("the ledger"));
+    assert_eq!(meta[4].get(0), Some("1200"));
+    assert_eq!(meta[5].get(0), Some("1"));
 }
 
 #[test]
@@ -150,14 +220,14 @@ fn a_stream_reads_back_with_its_blocks_marked() {
     let widths = schema.widths();
 
     let mut out = Stream::new(schema, widths, Vec::new());
-    out.meta("format 2").unwrap();
-    out.meta("shard 1").unwrap();
+    out.meta("format", [2]).unwrap();
+    out.meta("shard", [1]).unwrap();
     out.header().unwrap();
     out.row(["7tm_1", "175.8"]).unwrap();
-    out.meta("shard 2").unwrap();
+    out.meta("shard", [2]).unwrap();
     out.row(["a-name-longer-than-its-column", "1"]).unwrap();
     out.row(["x", "2"]).unwrap();
-    out.meta("end 3").unwrap();
+    out.meta("end", [3]).unwrap();
 
     let text = String::from_utf8(out.into_inner()).unwrap();
     let back = Table::parse(&text).unwrap();
@@ -246,7 +316,7 @@ fn check(style: Style, ragged: Option<usize>) {
         .collect();
 
     let mut table = Table::new(Schema::new(columns).style(style.clone()));
-    table.meta("format 1");
+    table.meta("format", [1]);
     table.comment("a comment directly above the header");
     table.row([
         Cell::from("alpha"),
@@ -376,7 +446,7 @@ fn random_tables_read_back() {
         let mut expected = Vec::new();
         for _ in 0..rng.below(4) {
             match rng.below(3) {
-                0 => table.meta(rng.word(8)),
+                0 => table.meta(&rng.word(8), [""; 0]),
                 _ => table.comment(rng.word(8)),
             };
         }

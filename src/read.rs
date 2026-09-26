@@ -11,6 +11,7 @@ use std::path::Path;
 
 use crate::cell::{Align, Row, Text};
 use crate::column::{Column, MARKER, Schema};
+use crate::meta::MetaRow;
 use crate::render::{INDENT, Table, Widths, line, needs_separator};
 use crate::style::{Marker, Rule, Stack, Style, Trailing};
 
@@ -227,12 +228,14 @@ impl Table {
         &self.schema.labels
     }
 
-    /// The text of each `#=` line above the header, without the `#=`.
-    pub fn meta_lines(&self) -> impl Iterator<Item = &str> {
+    /// Every `#=` line, above the header and then between the rows, in the
+    /// order they were written.
+    pub fn meta_rows(&self) -> impl Iterator<Item = MetaRow<'_>> {
+        let missing = self.schema.style.missing.as_str();
         self.preamble
             .iter()
-            .filter_map(|line| line.strip_prefix("#="))
-            .map(|text| text.strip_prefix(' ').unwrap_or(text))
+            .chain(self.interludes.iter().map(|(_, line)| line))
+            .filter_map(move |line| MetaRow::parse(line, missing))
     }
 
     /// Which column carries `label`, as [`labels`](Self::labels) spells it.

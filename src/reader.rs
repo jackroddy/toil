@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 use std::io::BufRead;
 
+use crate::meta::MetaRow;
 use crate::read::{ParseError, Span, cut_bytes, lays_out, split_bytes};
 use crate::render::{INDENT, Table};
 use crate::style::Marker;
@@ -34,7 +35,9 @@ pub struct Reader<R: BufRead> {
 pub enum Entry<'a> {
     /// A row, cut into cells.
     Row(Cells<'a>),
-    /// A `#` line between the rows, `#` and all.
+    /// A `#=` line between the rows, read as a key and its words.
+    Meta(MetaRow<'a>),
+    /// Any other `#` line between the rows, `#` and all.
     Comment(&'a str),
 }
 
@@ -165,7 +168,12 @@ impl<R: BufRead> Reader<R> {
         if self.buf.starts_with(b"#") {
             let text = std::str::from_utf8(&self.buf)
                 .map_err(|_| invalid(self.line, "the line is not UTF-8"))?;
-            return Ok(Some((self.line, Entry::Comment(text))));
+            let missing = self.header.schema.style.missing.as_str();
+            let entry = match MetaRow::parse(text, missing) {
+                Some(row) => Entry::Meta(row),
+                None => Entry::Comment(text),
+            };
+            return Ok(Some((self.line, entry)));
         }
 
         let reached = cut_bytes(

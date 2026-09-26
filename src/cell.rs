@@ -79,6 +79,18 @@ impl Cell {
 
         self.align.unwrap_or(column.align)
     }
+
+    /// Write the cell out as one word of a `#=` line, onto the end of `out`.
+    pub(crate) fn word(&self, missing: &str, out: &mut String) {
+        match &self.value {
+            Value::Text(text) if !text.is_empty() => out.push_str(text),
+            Value::Text(_) | Value::Missing => out.push_str(missing),
+            Value::Num(n) => write_plain(*n, out),
+            Value::Num32(n) => write_plain(*n, out),
+            Value::Int(n) => write_int(*n, out),
+            Value::Uint(n) => write_int(*n, out),
+        }
+    }
 }
 
 /// A cell that has been written out, with the padding it will be given.
@@ -191,6 +203,12 @@ macro_rules! cell_from_int {
 
 cell_from_int!(Uint, u64: u8, u16, u32, u64, usize);
 cell_from_int!(Int, i64: i8, i16, i32, i64, isize);
+
+fn write_plain(n: impl std::fmt::Display + std::fmt::LowerExp, out: &mut String) {
+    let mut text = String::new();
+    crate::column::Format::Plain.write(n, &mut text);
+    out.push_str(&text);
+}
 
 fn write_int(n: impl std::fmt::Display, out: &mut String) {
     use std::fmt::Write;
