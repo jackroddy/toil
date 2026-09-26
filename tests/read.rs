@@ -1,12 +1,44 @@
 //! Reading tables back: whatever `toil` writes, `Table::parse` recovers.
 
-use toil::{Align, Cell, Column, Marker, Rule, Schema, Stack, Stream, Style, Table, Trailing};
+use toil::{
+    Align, Cell, Column, Entry, Marker, Reader, Rule, Schema, Stack, Stream, Style, Table, Trailing,
+};
 
 /// Parse `text`, render what came back, and hold the two to each other.
 fn round_trip(text: &str) -> Table {
     let table = Table::parse(text).unwrap_or_else(|e| panic!("{e}\n{text}"));
     assert_eq!(table.render(), text, "rendered back differently");
+    read_alike(text, &table, text);
     table
+}
+
+/// Hold a [`Reader`] over `text` to what `Table::parse` made of it: the same
+/// preamble and labels, the same cells, and the same comments where they sat.
+fn read_alike(text: &str, back: &Table, context: &str) {
+    let mut reader = Reader::new(text.as_bytes()).unwrap_or_else(|e| panic!("{e}\n{context}"));
+    assert_eq!(reader.header().preamble(), back.preamble(), "{context}");
+    assert_eq!(reader.header().labels(), back.labels(), "{context}");
+
+    let n = back.labels().len();
+    let mut rows = Vec::new();
+    let mut comments = Vec::new();
+    while let Some((_, entry)) = reader.next_entry().unwrap() {
+        match entry {
+            Entry::Row(cells) => rows.push(
+                (0..n)
+                    .map(|i| match cells.field(i) {
+                        None => Some(String::new()),
+                        Some(b"-") => None,
+                        Some(text) => Some(String::from_utf8(text.to_vec()).unwrap()),
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            Entry::Comment(line) => comments.push((rows.len(), line.to_string())),
+        }
+    }
+
+    assert_eq!(rows, cells(back), "{context}");
+    assert_eq!(comments, back.interludes(), "{context}");
 }
 
 fn cells(table: &Table) -> Vec<Vec<Option<String>>> {
@@ -240,6 +272,7 @@ fn check(style: Style, ragged: Option<usize>) {
     let text = table.render();
     let context = format!("{style:?} ragged {ragged:?}\n{text}");
     let back = Table::parse(&text).unwrap_or_else(|e| panic!("{e}\n{context}"));
+    read_alike(&text, &back, &context);
 
     assert_eq!(back.render(), text, "rendered back differently: {context}");
     assert_eq!(
@@ -389,6 +422,7 @@ fn random_tables_read_back() {
         let text = table.render();
         let context = format!("case {case}: {style:?}\n{text}");
         let back = Table::parse(&text).unwrap_or_else(|e| panic!("{e}\n{context}"));
+        read_alike(&text, &back, &context);
 
         assert_eq!(back.render(), text, "rendered back differently, {context}");
         assert_eq!(back.labels(), labels, "{context}");

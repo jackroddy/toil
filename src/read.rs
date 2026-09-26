@@ -18,8 +18,8 @@ use crate::style::{Marker, Rule, Stack, Style, Trailing};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseError {
     /// Counted from 1, or 0 for a fault in the text as a whole.
-    line: usize,
-    reason: &'static str,
+    pub(crate) line: usize,
+    pub(crate) reason: &'static str,
 }
 
 impl fmt::Display for ParseError {
@@ -129,6 +129,7 @@ impl Table {
             marker: Marker::Absorb,
             trailing,
             missing,
+            stream: false,
         };
 
         // a row that does not open with two spaces was written
@@ -144,21 +145,25 @@ impl Table {
             true => &[Marker::Indent, Marker::Absorb],
             false => &[Marker::Absorb, Marker::Indent],
         };
-        let mut solved: Option<(Reading, (Score, Vec<bool>))> = None;
-        for &marker in markers {
-            let reading = Reading { marker, ..reading };
-            let solution = reading.solve();
-            if solved.as_ref().is_none_or(|(_, best)| solution.0 > best.0) {
-                solved = Some((reading, solution));
-            }
-        }
-        let (reading, (score, ragged)) = solved.expect("at least one marker is tried");
+        let (reading, (score, ragged)) = solve(reading, markers);
 
-        // a stream's overrun reads right as plain, though a render
-        // widens it
-        let ragged = match score.0 {
-            true => ragged,
-            false => vec![false; columns.len()],
+        // no answer lays the rows out at the widths a render would
+        // measure, which is what a stream's overrun does: it never
+        // widens a column, so a wider cell pushes the rest of its
+        // row along. the rows are laid out that way instead, and
+        // failing that every column reads as plain
+        let (reading, ragged) = match score.0 {
+            true => (reading, ragged),
+            false => match solve(
+                Reading {
+                    stream: true,
+                    ..reading
+                },
+                markers,
+            ) {
+                (streamed, (score, ragged)) if score.0 => (streamed, ragged),
+                _ => (reading, vec![false; columns.len()]),
+            },
         };
         let built = reading.build(&ragged);
 
@@ -286,6 +291,9 @@ struct Reading<'a> {
     marker: Marker,
     trailing: Trailing,
     missing: &'a str,
+    /// Lay the rows out at the rule's widths, as a [`Stream`](crate::Stream)
+    /// writes them, rather than at the widths a render would measure.
+    stream: bool,
 }
 
 impl Reading<'_> {
@@ -428,7 +436,10 @@ impl Reading<'_> {
         let ruled = self.data_widths(ragged, pieces);
         let schema = with_widths(shape(n, ragged, &self.style(), &[]), &ruled, ragged);
         let rows: Vec<Row> = pieces.iter().map(|p| Row { cells: cells(p) }).collect();
-        let widths: Widths = schema.measure(&rows);
+        let widths: Widths = match self.stream {
+            true => Widths(ruled.clone()),
+            false => schema.measure(&rows),
+        };
 
         let as_ruled = (0..n).all(|k| ragged[k] || widths.as_slice()[k] == ruled[k]);
         let lead = match self.marker {
@@ -639,6 +650,19 @@ impl Reading<'_> {
 
         (current, ragged)
     }
+}
+
+/// The best answer under each of `markers`, the first winning a tie.
+fn solve<'a>(reading: Reading<'a>, markers: &[Marker]) -> (Reading<'a>, (Score, Vec<bool>)) {
+    let mut solved: Option<(Reading, (Score, Vec<bool>))> = None;
+    for &marker in markers {
+        let reading = Reading { marker, ..reading };
+        let solution = reading.solve();
+        if solved.as_ref().is_none_or(|(_, best)| solution.0 > best.0) {
+            solved = Some((reading, solution));
+        }
+    }
+    solved.expect("at least one marker is tried")
 }
 
 /// The most columns [`Reading::solve`] makes ragged in one step.
@@ -854,6 +878,199 @@ fn cut(line: &[char], mut pos: usize, widths: &[usize], ragged: &[bool]) -> Vec<
     }
 
     pieces
+}
+
+/// A cell's place in a line, in bytes.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Span {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    /// Padding came before the text, so the cell was right-aligned.
+    pub(crate) right: bool,
+}
+
+/// The byte `chars` characters on from `from`, or the end of the line.
+//
+// counts the bytes that open a UTF-8 character, so a row
+// is never validated as text
+fn advance(line: &[u8], from: usize, chars: usize) -> usize {
+    let mut at = from;
+    let mut left = chars;
+    while at < line.len() {
+        if line[at] & 0xC0 != 0x80 {
+            if left == 0 {
+                return at;
+            }
+            left -= 1;
+        }
+        at += 1;
+    }
+    line.len()
+}
+
+fn chars(bytes: &[u8]) -> usize {
+    bytes.iter().filter(|&&b| b & 0xC0 != 0x80).count()
+}
+
+fn trimmed(line: &[u8], start: usize, end: usize) -> (usize, usize) {
+    let seg = &line[start..end];
+    let head = seg.iter().take_while(|b| b.is_ascii_whitespace()).count();
+    let tail = seg[head..]
+        .iter()
+        .rev()
+        .take_while(|b| b.is_ascii_whitespace())
+        .count();
+    (start + head, end - tail)
+}
+
+/// Cut a row into spans as [`cut`] cuts it into pieces, starting `open`
+/// characters in, and give back how many cells the line reaches.
+pub(crate) fn cut_bytes(
+    line: &[u8],
+    open: usize,
+    widths: &[usize],
+    ragged: &[bool],
+    spans: &mut Vec<Span>,
+) -> usize {
+    let n = widths.len();
+    spans.clear();
+    let mut pos = advance(line, 0, open);
+    let mut reached = 0;
+
+    for k in 0..n {
+        if pos >= line.len() {
+            spans.push(Span {
+                start: line.len(),
+                end: line.len(),
+                right: false,
+            });
+            continue;
+        }
+        reached += 1;
+
+        if k + 1 == n {
+            let (start, end) = trimmed(line, pos, line.len());
+            spans.push(Span {
+                start,
+                end,
+                right: !ragged[k] && line[pos] == b' ' && start < end,
+            });
+            break;
+        }
+
+        let end = advance(line, pos, widths[k]);
+        let fills = end >= line.len() || line[end] == b' ';
+        let (start, stop) = trimmed(line, pos, end);
+        let spaced = line[start..stop].contains(&b' ');
+
+        match !ragged[k] && fills && !spaced {
+            true => {
+                spans.push(Span {
+                    start,
+                    end: stop,
+                    right: line[pos] == b' ' && start < stop,
+                });
+                pos = end + 1;
+            }
+            false => {
+                let len = line[pos..].iter().take_while(|&&b| b != b' ').count();
+                spans.push(Span {
+                    start: pos,
+                    end: pos + len,
+                    right: false,
+                });
+                pos += len + 1;
+            }
+        }
+    }
+
+    reached
+}
+
+/// Whether `spans`, laid out at `widths` as [`line`] lays a row out, are
+/// `line` again, padding at the end aside.
+pub(crate) fn lays_out(
+    line: &[u8],
+    open: usize,
+    widths: &[usize],
+    ragged: &[bool],
+    spans: &[Span],
+) -> bool {
+    let end = line.len()
+        - line
+            .iter()
+            .rev()
+            .take_while(|b| b.is_ascii_whitespace())
+            .count();
+    let written = &line[..end];
+
+    // spaces are owed until text follows them, as a stream
+    // writes them, so padding a line ends on is not needed
+    let mut at = 0;
+    let mut pending = open;
+    for (k, span) in spans.iter().enumerate() {
+        if k > 0 {
+            pending += 1;
+        }
+
+        let text = &line[span.start..span.end];
+        let pad = match ragged[k] {
+            true => 0,
+            false => widths[k].saturating_sub(chars(text)),
+        };
+        if span.right {
+            pending += pad;
+        }
+
+        if !text.is_empty() {
+            let spaced = written
+                .get(at..at + pending)
+                .is_some_and(|gap| gap.iter().all(|&b| b == b' '));
+            if !spaced || !written[at + pending..].starts_with(text) {
+                return false;
+            }
+            at += pending + text.len();
+            pending = 0;
+        }
+
+        if !span.right {
+            pending += pad;
+        }
+    }
+
+    at == written.len()
+}
+
+/// Split a row on whitespace as [`split`] does, into `spans`, and give back
+/// how many cells the line reaches.
+pub(crate) fn split_bytes(line: &[u8], n: usize, spans: &mut Vec<Span>) -> usize {
+    spans.clear();
+    let mut pos = trimmed(line, 0, line.len()).0;
+    let mut reached = 0;
+
+    for k in 0..n {
+        let (start, end) = match k + 1 == n {
+            true => trimmed(line, pos, line.len()),
+            false => {
+                let len = line[pos..].iter().take_while(|&&b| b != b' ').count();
+                let end = pos + len;
+                let (next, _) = trimmed(line, end, line.len());
+                let at = pos;
+                pos = next;
+                (at, end)
+            }
+        };
+        if start < line.len() {
+            reached += 1;
+        }
+        spans.push(Span {
+            start,
+            end,
+            right: false,
+        });
+    }
+
+    reached
 }
 
 /// What a plain last column holds a header line to, once its width is known.

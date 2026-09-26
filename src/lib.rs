@@ -72,6 +72,7 @@
 mod cell;
 mod column;
 mod read;
+mod reader;
 mod render;
 mod stream;
 mod style;
@@ -79,6 +80,7 @@ mod style;
 pub use cell::{Align, Cell, Row};
 pub use column::{Column, Format, Schema};
 pub use read::ParseError;
+pub use reader::{Cells, Entry, Reader};
 pub use render::{Header, Table, Widths};
 pub use stream::{Line, Stream};
 pub use style::{Marker, Rule, Stack, Style, Trailing};

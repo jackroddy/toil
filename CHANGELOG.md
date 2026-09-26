@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Reader`, which reads a table a line at a time: the header first, then each
+  row as byte cells borrowed from one reused buffer, and each `#` line where
+  it sat among the rows. It settles how to cut every row from the first 256.
+
+### Fixed
+
+- `Table::parse` read a `Stream` table's ragged columns and stacked labels
+  right only until a cell overran its column. After an overrun it read every
+  column as plain, which shifted the header.
+
 ## [0.1.0] - 2026-09-25
 
 ### Added

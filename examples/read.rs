@@ -2,10 +2,12 @@
 //! its shape to go on writing it.
 //!
 //! The text here is a string, and [`Table::read`] does the same from a file.
+//! A table too long to hold whole goes through a [`Reader`] instead, a line
+//! at a time.
 
 use std::io::{Write, stdout};
 
-use toil::{Cell, Column, Rule, Schema, Stream, Style, Table};
+use toil::{Cell, Column, Entry, Reader, Rule, Schema, Stream, Style, Table};
 
 fn main() -> std::io::Result<()> {
     let schema = Schema::new([
@@ -54,6 +56,16 @@ fn main() -> std::io::Result<()> {
         let city = back.get(row, "city").unwrap_or("?");
         let rain = back.get(row, "rain").unwrap_or("no reading");
         writeln!(out, "{city}: {rain}")?;
+    }
+
+    writeln!(out)?;
+    let mut reader = Reader::new(text.as_bytes())?;
+    let high = reader.header().index("high").expect("the table has a high");
+    while let Some((number, entry)) = reader.next_entry()? {
+        if let Entry::Row(cells) = entry {
+            let text = cells.field(high).unwrap_or_default();
+            writeln!(out, "line {number}: high {}", String::from_utf8_lossy(text))?;
+        }
     }
 
     out.flush()

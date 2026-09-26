@@ -79,16 +79,19 @@ from how one repo calls them.
 ## Where the crate stands
 
 Built 2026-09-07 and passing. `#![warn(missing_docs)]` is on, so every public
-item carries at least a line and a new one without it warns. `src/` is seven
+item carries at least a line and a new one without it warns. `src/` is eight
 files: `column.rs` (`Column`,
 `Format`, `Schema`), `cell.rs` (`Cell`, `Row`, `Align`), `style.rs` (`Marker`,
 `Rule`, `Stack`, `Trailing`), `render.rs` (`Widths`, `Table`, and the line
 laying-out), `stream.rs` (`Stream`), `read.rs` (`Table::parse`, `ParseError`),
-`lib.rs`.
+`reader.rs` (`Reader`, `Entry`, `Cells`: a table a line at a time, cut the way
+`parse` cuts its first 256 rows), `lib.rs`.
 
 `tests/read.rs` holds the reader to what the crate writes: every golden read
 back and rendered to the same bytes, one table per combination of the style's
-axes, and 5000 random tables from a fixed seed.
+axes, and 5000 random tables from a fixed seed. Each of those also goes
+through `Reader`, which has to give the same cells and comments.
+`tests/reader.rs` reads a 1000-row `Stream` table past the sample.
 
 `tests/golden.rs` holds seven tables the surveyed projects write today, with
 their expected text embedded rather than read from those repositories. Between
