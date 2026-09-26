@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   taking the rest of the line, and give each header word to the column it
   sits in. They no longer search for which columns are ragged, sample the
   first rows, or cut rows by position. Reading gives back the cells, the
-  labels and the `#` lines, and the widths where a dashed rule records
-  them. It no longer recovers the writer's style, so a parsed table need
-  not render the text it came from.
+  labels and the `#` lines, and the widths, marker and padding that
+  appending rows with `Stream::continued` needs. The widths come from a
+  dashed rule, or else from where the header words start, which leaves the
+  last column at its label's width. It no longer recovers the rest of the
+  writer's style, so a parsed table need not render the text it came from.
 - A cell holding an empty string, including `Line::text("")` and
   `Line::bytes(b"")`, is written as the placeholder and reads back as
   missing, since a split would lose it.

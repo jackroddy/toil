@@ -1,4 +1,4 @@
-//! Reading a table a line at a time, past the rows held back to settle it.
+//! Reading a table a line at a time.
 
 use std::io::ErrorKind;
 
@@ -17,7 +17,7 @@ fn schema() -> Schema {
 
 /// The cells of row `r`, as they are written.
 fn row(r: usize) -> [String; 6] {
-    // an overrun, and a non-ASCII cell, both past the sample
+    // an overrun, and a non-ASCII cell
     let target = match r {
         700 => "a-target-far-wider-than-its-column".to_string(),
         900 => "café".to_string(),
@@ -67,7 +67,7 @@ fn written() -> Vec<u8> {
 }
 
 #[test]
-fn every_row_reads_back_past_the_sample() {
+fn every_row_reads_back() {
     let text = written();
     let lines: Vec<&[u8]> = text.split(|&b| b == b'\n').collect();
 
@@ -155,7 +155,7 @@ fn a_long_table_parses_as_it_streams() {
 #[test]
 fn a_row_is_bytes_and_a_comment_is_text() {
     let mut text = written();
-    // row 800, past the sample
+    // row 800
     let at = text.windows(5).position(|w| w == b"\nq600").unwrap();
     text[at + 2] = 0xFF;
     text.extend_from_slice(b"#= \xFF\n");

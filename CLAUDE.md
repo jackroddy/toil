@@ -280,7 +280,8 @@ Settled 2026-09-07. Full design in
   is generic to any table `toil` writes.
 
   Reading is for the data: the cells, the labels, the `#` lines, and the
-  widths where a dashed rule records them. **It is not for rebuilding the
+  widths, marker and padding that appending with `Stream::continued` needs.
+  **It is not for rebuilding the
   writer's style**, and a parsed table need not render the text it came
   from. Jack never wanted that; an earlier session wrote it in here as a
   goal, and the search it needed was removed on 2026-09-26.

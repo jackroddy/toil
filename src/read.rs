@@ -13,7 +13,7 @@ use crate::cell::{Align, Row, Text};
 use crate::column::{Column, MARKER, Schema};
 use crate::meta::MetaRow;
 use crate::render::{INDENT, Table, needs_separator};
-use crate::style::{Marker, Rule, Stack, Style, Trailing};
+use crate::style::{Marker, Style, Trailing};
 
 /// Why some text could not be read as a table.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,9 +38,12 @@ impl Table {
     /// Read a table back from text [`Table::render`] or a [`Stream`] wrote.
     ///
     /// The cells come back as written, a cell holding the placeholder as
-    /// missing, along with the labels and the `#` lines. The widths come back
-    /// where the rule records them. The rest of the style is not recorded, so
-    /// the result need not render the text it came from.
+    /// missing, along with the labels and the `#` lines, and the widths and
+    /// marker that appending rows with [`Stream::continued`] needs. The rest
+    /// of the style is not kept, so the result need not render the text it
+    /// came from.
+    ///
+    /// [`Stream::continued`]: crate::Stream::continued
     ///
     /// [`Stream`]: crate::Stream
     pub fn parse(text: &str) -> Result<Table, ParseError> {
@@ -159,7 +162,6 @@ struct Head {
     /// The first and last header lines.
     top: usize,
     bottom: usize,
-    rule: Rule,
     /// The first line under the header and the rule.
     body_from: usize,
     /// Where each column starts on the header lines, and under a dashed rule
@@ -182,11 +184,6 @@ impl Head {
         // the last rule-shaped line, since a preamble may draw one
         // of its own
         let rule_at = (0..lead).rev().find(|&i| is_rule(raw[i]));
-        let rule = match rule_at {
-            Some(i) if raw[i].as_bytes().get(1) == Some(&b'-') => Rule::Solid,
-            Some(_) => Rule::Dashes,
-            None => Rule::None,
-        };
 
         // the line directly above a rule is header whatever it holds,
         // since a header of empty labels is a bare `#` too; under no
@@ -201,8 +198,9 @@ impl Head {
             line: 0,
             reason: "no header naming the columns",
         })?;
+        // a solid rule runs straight on from the `#`
         let runs = rule_at
-            .filter(|_| rule == Rule::Dashes)
+            .filter(|&i| raw[i].as_bytes().get(1) != Some(&b'-'))
             .map(|i| dash_runs(raw[i]));
 
         // under a dashed rule a header line's words each start where a
@@ -241,7 +239,6 @@ impl Head {
         Ok(Head {
             top,
             bottom,
-            rule,
             body_from: rule_at.map_or(bottom + 1, |i| i + 1),
             starts,
             dashes,
@@ -262,30 +259,19 @@ impl Head {
     }
 
     /// The columns: their labels, the widths the rule or header gives them,
-    /// and the style the lines show, with `data` the rows' lines.
+    /// and what appending rows needs of the style, with `data` the rows'
+    /// lines.
     fn schema(&self, raw: &[&str], data: &[&str], missing: &str) -> Schema {
         let n = self.starts.len();
-        let lines = self.bottom - self.top + 1;
 
         // each word goes to the last column starting at or before it
-        let mut labels: Vec<Vec<(usize, String)>> = vec![Vec::new(); n];
-        for (line, i) in (self.top..=self.bottom).enumerate() {
-            for (at, word) in words(raw[i]) {
+        let mut labels: Vec<Vec<String>> = vec![Vec::new(); n];
+        for line in &raw[self.top..=self.bottom] {
+            for (at, word) in words(line) {
                 let k = self.starts.iter().rposition(|&s| s <= at).unwrap_or(0);
-                labels[k].push((line, word.to_string()));
+                labels[k].push(word.to_string());
             }
         }
-
-        // a label shorter than the header is stacked from the top when its
-        // words stop short of the bottom line
-        let stack = match labels.iter().any(|words| {
-            !words.is_empty()
-                && words.len() < lines
-                && words.iter().all(|&(line, _)| line + 1 < lines)
-        }) {
-            true => Stack::Top,
-            false => Stack::Bottom,
-        };
 
         let rows: Vec<&&str> = data.iter().filter(|l| !l.is_empty()).collect();
         let marker = match !rows.is_empty() && rows.iter().all(|l| l.starts_with(INDENT)) {
@@ -298,8 +284,6 @@ impl Head {
             .any(|l| l.ends_with(' '));
         let style = Style::default()
             .marker(marker)
-            .rule(self.rule)
-            .stack(stack)
             .trailing(match keep {
                 true => Trailing::Keep,
                 false => Trailing::Trim,
@@ -320,7 +304,7 @@ impl Head {
                     (None, true) => self.starts[k + 1] - self.starts[k] - 1,
                     (None, false) => labels[k]
                         .iter()
-                        .map(|(_, w)| w.chars().count())
+                        .map(|w| w.chars().count())
                         .max()
                         .unwrap_or(0),
                 };
@@ -334,9 +318,7 @@ impl Head {
         let columns: Vec<Column> = labels
             .into_iter()
             .zip(widths)
-            .map(|(words, width)| {
-                Column::stacked(words.into_iter().map(|(_, w)| w)).min_width(width)
-            })
+            .map(|(words, width)| Column::stacked(words).min_width(width))
             .collect();
         Schema::new(columns).style(style)
     }

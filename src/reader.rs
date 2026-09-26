@@ -16,8 +16,8 @@ pub struct Reader<R: BufRead> {
     header: Table,
     masks: Masks,
 
-    /// Lines read to settle the header and not yet handed out.
-    sample: VecDeque<Vec<u8>>,
+    /// Lines read with the header and not yet handed out.
+    held: VecDeque<Vec<u8>>,
 
     buf: Vec<u8>,
     spans: Vec<Span>,
@@ -26,7 +26,7 @@ pub struct Reader<R: BufRead> {
 
 /// One line of a table's body.
 pub enum Entry<'a> {
-    /// A row, cut into cells.
+    /// A row, split into cells.
     Row(Cells<'a>),
     /// A `#=` line between the rows, read as a key and its words.
     Meta(MetaRow<'a>),
@@ -60,7 +60,7 @@ impl<'a> Cells<'a> {
 }
 
 impl<R: BufRead> Reader<R> {
-    /// Read the lines above the rows, and enough rows to know how to cut them.
+    /// Read the lines above the rows, and the first row.
     ///
     /// # Errors
     ///
@@ -68,7 +68,7 @@ impl<R: BufRead> Reader<R> {
     /// as does a line above the rows that is not UTF-8.
     pub fn new(mut input: R) -> std::io::Result<Reader<R>> {
         let mut lead = Vec::new();
-        let mut sample = VecDeque::new();
+        let mut held = VecDeque::new();
 
         // the first row is held back too, since it is what says which
         // marker the rows are written with
@@ -78,7 +78,7 @@ impl<R: BufRead> Reader<R> {
                 break;
             }
             if !buf.starts_with(b"#") {
-                sample.push_back(buf);
+                held.push_back(buf);
                 break;
             }
             let text = String::from_utf8(buf)
@@ -87,7 +87,7 @@ impl<R: BufRead> Reader<R> {
         }
 
         let mut text = lead.join("\n");
-        for line in &sample {
+        for line in &held {
             text.push('\n');
             text.push_str(&String::from_utf8_lossy(line));
         }
@@ -104,7 +104,7 @@ impl<R: BufRead> Reader<R> {
             .take_while(|(at, _)| *at == 0)
             .count();
         for line in lead.drain(lead.len() - before..).rev() {
-            sample.push_front(line.into_bytes());
+            held.push_front(line.into_bytes());
         }
         header.rows.clear();
         header.interludes.clear();
@@ -113,7 +113,7 @@ impl<R: BufRead> Reader<R> {
             input,
             header,
             masks: Masks::default(),
-            sample,
+            held,
             buf: Vec::new(),
             spans: Vec::new(),
             line: lead.len(),
@@ -134,7 +134,7 @@ impl<R: BufRead> Reader<R> {
     /// A failed read, or a `#` line that is not UTF-8, which fails as
     /// [`std::io::ErrorKind::InvalidData`].
     pub fn next_entry(&mut self) -> std::io::Result<Option<(usize, Entry<'_>)>> {
-        match self.sample.pop_front() {
+        match self.held.pop_front() {
             Some(line) => self.buf = line,
             None => {
                 if !next_line(&mut self.input, &mut self.buf)? {

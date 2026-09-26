@@ -432,7 +432,6 @@ fn random_table(rng: &mut Lcg, case: usize, wider: bool) {
 
         let n = 1 + rng.below(if wider { 8 } else { 5 }) as usize;
         let mut labels = Vec::new();
-        let mut raggeds = Vec::new();
         let columns: Vec<Column> = (0..n)
             .map(|k| {
                 let depth = 1 + rng.below(3);
@@ -448,7 +447,6 @@ fn random_table(rng: &mut Lcg, case: usize, wider: bool) {
                     })
                     .collect();
                 let ragged = rng.below(4) == 0;
-                raggeds.push(ragged);
                 labels.push(words.join(" "));
                 let mut column = Column::stacked(words);
                 if ragged {
@@ -479,7 +477,7 @@ fn random_table(rng: &mut Lcg, case: usize, wider: bool) {
         for _ in 0..rows {
             let mut row = Vec::new();
             let mut want = Vec::new();
-            for (k, &ragged) in raggeds.iter().enumerate() {
+            for k in 0..n {
                 let (cell, text) = match rng.below(6) {
                     0 => (Cell::missing(), None),
                     // a space only in the last column, and never at
@@ -490,13 +488,7 @@ fn random_table(rng: &mut Lcg, case: usize, wider: bool) {
                         (Cell::from(text.clone()), Some(text))
                     }
                     _ => {
-                        // an empty ragged cell moves the rest of the
-                        // row along by one, which a plain column can
-                        // write the same way with a right-aligned cell
-                        let text = match ragged {
-                            true => rng.word(8) + "w",
-                            false => rng.word(9),
-                        };
+                        let text = rng.word(9);
                         // an empty cell is written as the placeholder
                         let want = Some(text.clone()).filter(|t| !t.is_empty());
                         (Cell::from(text), want)
