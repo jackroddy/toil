@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-25
+
 ### Added
 
 - `MetaRow`, a `#=` line read as a key and the words after it: `get` for one
@@ -68,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Line::cell`, which writes any `Cell` into a stream line, integers and
   `Option`s included, and honours a cell's own alignment.
 
-[Unreleased]: https://github.com/jackroddy/toil/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/jackroddy/toil/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jackroddy/toil/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/jackroddy/toil/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jackroddy/toil/releases/tag/v0.1.0
