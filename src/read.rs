@@ -677,17 +677,24 @@ impl Reading<'_> {
 
         let mut ragged = vec![false; n];
         let mut current = self.score(&ragged);
-        while current != perfect {
-            // ragged columns whose words are empty on a line each move
-            // the rest of it by one, and it can take several at once
-            // before the line cuts any further, so sets of up to three
-            // are weighed together, the smaller and then the leftmost
-            // winning a tie. one column that explains everything ends
-            // the search early
+        // ragged columns whose words are empty on a line each move
+        // the rest of it by one, and it can take several at once
+        // before the line cuts any further, so sets of up to three
+        // are weighed together, the smaller and then the leftmost
+        // winning a tie. one column that explains everything ends
+        // the search early
+        let explains = |score: &Score| score.0 && score.1 == n + 1 && score.2 == whole;
+        let weigh = |ragged: &[bool], last: usize, most: usize| {
             let mut best: Option<(Score, Reverse<usize>, Reverse<Vec<usize>>)> = None;
-            'sizes: for size in 1..=MOST_AT_ONCE {
-                for set in subsets(&ragged, size) {
-                    let mut r = ragged.clone();
+            'sizes: for size in 1..=most {
+                // a set that already explains every row and header
+                // line leaves only the tie, which the search goes on
+                // to settle a column at a time
+                if best.as_ref().is_some_and(|(score, _, _)| explains(score)) {
+                    break;
+                }
+                for set in subsets(ragged, size, last) {
+                    let mut r = ragged.to_vec();
                     for &j in &set {
                         r[j] = true;
                     }
@@ -701,6 +708,23 @@ impl Reading<'_> {
                     }
                 }
             }
+            best
+        };
+
+        while current != perfect {
+            // a line is cut left to right, so a set that gets rows or
+            // header lines further before going wrong has a column at
+            // or before where they go wrong now. failing those, and
+            // once nothing goes wrong at all, what is left is the tie
+            // between answers, which one column at a time settles
+            let rows = (current.1 <= n).then_some(current.1);
+            let header = (current.2 < whole).then_some(current.2 % (n + 1));
+            let best = match rows.into_iter().chain(header).max() {
+                Some(wrong) => weigh(&ragged, wrong.min(n - 1), MOST_AT_ONCE)
+                    .filter(|(score, _, _)| *score > current)
+                    .or_else(|| weigh(&ragged, n - 1, 1)),
+                None => weigh(&ragged, n - 1, 1),
+            };
 
             match best {
                 Some((score, _, Reverse(set))) if score > current => {
@@ -750,7 +774,7 @@ fn every_answer(reading: Reading, markers: &[Marker]) -> Option<(Table, usize)> 
             let mut best: Option<(Score, Table, usize)> = None;
             for &marker in markers {
                 let reading = Reading { marker, ..reading };
-                for set in subsets(&vec![false; n], size) {
+                for set in subsets(&vec![false; n], size, n - 1) {
                     let mut ragged = vec![false; n];
                     for j in set {
                         ragged[j] = true;
@@ -832,8 +856,9 @@ fn reproduces(table: &Table, raw: &[&str], first: usize) -> bool {
         .eq(raw[first..].iter().copied())
 }
 
-/// Every set of `size` columns not yet ragged, in ascending order.
-fn subsets(ragged: &[bool], size: usize) -> Vec<Vec<usize>> {
+/// Every set of `size` columns not yet ragged whose first is at or before
+/// `last`, in ascending order.
+fn subsets(ragged: &[bool], size: usize, last: usize) -> Vec<Vec<usize>> {
     let free: Vec<usize> = (0..ragged.len()).filter(|&j| !ragged[j]).collect();
     let mut sets = Vec::new();
     let mut set = Vec::with_capacity(size);
@@ -850,7 +875,11 @@ fn subsets(ragged: &[bool], size: usize) -> Vec<Vec<usize>> {
         }
     }
 
-    extend(&free, size, &mut set, &mut sets);
+    for (i, &first) in free.iter().enumerate().take_while(|&(_, &j)| j <= last) {
+        set.push(first);
+        extend(&free[i + 1..], size, &mut set, &mut sets);
+        set.pop();
+    }
     sets
 }
 

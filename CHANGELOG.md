@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cell whose own text ends in spaces now keeps them, as `Line` already did.
 - `toil` depends on `wide`.
 
+### Fixed
+
+- `Table::parse` and `Reader::new` took time growing with about the fourth
+  power of the column count on a table with no answer the search counts as
+  perfect, such as one with columns set wider than their labels and cells:
+  80 columns took 2.6 s and 164 columns over 30 s. The search now weighs
+  only sets of columns that start at or before where the rows or header go
+  wrong, stops growing a set once one explains every line, and then
+  settles the tie a column at a time. 164 columns and 1,000 rows open in
+  0.29 s.
+
 ## [0.2.1] - 2026-09-25
 
 ### Changed
