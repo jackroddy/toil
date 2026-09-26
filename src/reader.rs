@@ -4,16 +4,8 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 
 use crate::meta::MetaRow;
-use crate::read::{ParseError, Span, cut_row, split_bytes};
-use crate::render::{INDENT, Table};
-use crate::style::Marker;
-
-/// How many rows are held back to settle how the rest are cut.
-//
-// the search over them costs about a millisecond a row on
-// a table of 17 columns, and this is what every file pays
-// before its first row
-const SAMPLE: usize = 64;
+use crate::read::{Cutter, ParseError, SAMPLE, Span};
+use crate::render::Table;
 
 /// A table read a line at a time.
 ///
@@ -23,9 +15,7 @@ const SAMPLE: usize = 64;
 pub struct Reader<R: BufRead> {
     input: R,
     header: Table,
-    widths: Vec<usize>,
-    ragged: Vec<bool>,
-    open: usize,
+    cutter: Cutter,
 
     /// Lines read to settle the header and not yet handed out.
     sample: VecDeque<Vec<u8>>,
@@ -124,20 +114,11 @@ impl<R: BufRead> Reader<R> {
         header.rows.clear();
         header.interludes.clear();
 
-        let columns = &header.schema.columns;
-        let widths = columns.iter().map(|c| c.min_width).collect();
-        let ragged = columns.iter().map(|c| c.ragged).collect();
-        let open = match header.schema.style.marker {
-            Marker::Absorb => 0,
-            Marker::Indent => INDENT.len(),
-        };
-
+        let cutter = Cutter::of(&header.schema);
         Ok(Reader {
             input,
             header,
-            widths,
-            ragged,
-            open,
+            cutter,
             sample,
             buf: Vec::new(),
             spans: Vec::new(),
@@ -180,17 +161,7 @@ impl<R: BufRead> Reader<R> {
             return Ok(Some((self.line, entry)));
         }
 
-        let cut = cut_row(
-            &self.buf,
-            self.open,
-            &self.widths,
-            &self.ragged,
-            &mut self.spans,
-        );
-        let reached = match cut {
-            Some(reached) => reached,
-            None => split_bytes(&self.buf, self.widths.len(), &mut self.spans),
-        };
+        let reached = self.cutter.cut(&self.buf, &mut self.spans);
 
         let cells = Cells {
             line: &self.buf,

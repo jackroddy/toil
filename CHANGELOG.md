@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Table::parse` on a text of more than 64 rows searches the first 64 for
+  which columns are ragged and cuts the rest with that answer, as `Reader`
+  does. The search costs about 0.9 ms a row on a table of 17 columns, and
+  parse used to run it over every row: 10,000 rows took 9.3 s and now take
+  0.065 s, and 100,000 rows take 0.11 s. On such a text, a row that does not
+  lay out under the rule is split on whitespace alone, rather than every
+  row.
+- `Reader` finds where the runs of text in a row start and end with SIMD,
+  through `wide`, and cuts a row of left-aligned cells from those
+  positions without scanning the padding. Reading 3.4 million rows (429 MB)
+  takes 0.34 s where it took 0.39 to 0.41 s: 1.26 GB/s where it was 1.08.
+- `Stream::row` writes each cell straight into the stream, as `Line` does,
+  rather than building the whole line first. Writing a million rows of 17
+  cells takes 0.68 s where it took 0.90 s. Under `Trailing::Trim`, a last
+  cell whose own text ends in spaces now keeps them, as `Line` already did.
+- `toil` depends on `wide`.
+
 ## [0.2.1] - 2026-09-25
 
 ### Changed

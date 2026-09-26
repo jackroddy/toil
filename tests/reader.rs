@@ -2,7 +2,7 @@
 
 use std::io::ErrorKind;
 
-use toil::{Cell, Column, Entry, Reader, Schema, Stream};
+use toil::{Cell, Column, Entry, Reader, Schema, Stream, Table};
 
 fn schema() -> Schema {
     Schema::new([
@@ -116,6 +116,38 @@ fn every_row_reads_back_past_the_sample() {
             "# halfway",
             "shard 3",
             "end 1000"
+        ]
+    );
+}
+
+#[test]
+fn a_long_table_parses_as_it_streams() {
+    let text = String::from_utf8(written()).unwrap();
+    let back = Table::parse(&text).unwrap();
+    assert_eq!(back.labels()[3], "run one");
+    assert_eq!(back.rows().len(), 1000);
+
+    for (r, got) in back.rows().iter().enumerate() {
+        for (k, want) in row(r).iter().enumerate() {
+            let want = Some(want.as_str()).filter(|&want| want != "-");
+            assert_eq!(got.get(k), want, "row {r} cell {k}");
+        }
+    }
+
+    let shards: Vec<_> = back
+        .interludes()
+        .iter()
+        .map(|(at, line)| (*at, line.as_str()))
+        .collect();
+    assert_eq!(
+        shards,
+        [
+            (0, "#= shard 0"),
+            (250, "#= shard 1"),
+            (500, "#= shard 2"),
+            (500, "# halfway"),
+            (750, "#= shard 3"),
+            (1000, "#= end 1000"),
         ]
     );
 }

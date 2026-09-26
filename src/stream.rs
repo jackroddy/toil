@@ -100,8 +100,11 @@ impl<W: Write> Stream<W> {
 
     /// Write `cells` out against the columns and write the row.
     pub fn row(&mut self, cells: impl IntoIterator<Item = impl Into<Cell>>) -> std::io::Result<()> {
-        let row = self.schema.row(cells);
-        self.push(&row)
+        let mut line = self.line()?;
+        for cell in cells {
+            line.cell(cell)?;
+        }
+        line.end()
     }
 
     /// Write a row already built by [`Schema::row`].

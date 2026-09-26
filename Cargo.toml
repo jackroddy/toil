@@ -12,3 +12,4 @@ readme = "README.md"
 exclude = ["CLAUDE.md"]
 
 [dependencies]
+wide = "1.7.1"

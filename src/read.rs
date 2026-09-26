@@ -51,6 +51,21 @@ impl Table {
     /// with `missing` as its [placeholder](Style::missing).
     pub fn parse_missing(text: &str, missing: &str) -> Result<Table, ParseError> {
         let raw: Vec<&str> = text.lines().collect();
+
+        // the search is run over the first rows only, since it
+        // costs far more a row than cutting one does
+        let lead = raw.iter().position(|l| !l.starts_with('#'));
+        let past = lead.and_then(|lead| {
+            (lead..raw.len())
+                .filter(|&i| !raw[i].starts_with('#'))
+                .nth(SAMPLE)
+        });
+        if let Some(past) = past {
+            let mut table = Table::parse_missing(&raw[..past].join("\n"), missing)?;
+            table.extend(&raw[past..]);
+            return Ok(table);
+        }
+
         let chars: Vec<Vec<char>> = raw.iter().map(|l| l.chars().collect()).collect();
 
         // what comes before the first row: the preamble, the
@@ -196,6 +211,53 @@ impl Table {
         }
 
         Ok(table)
+    }
+
+    /// Cut `lines`, which come after the rows already read, the way those rows
+    /// settled.
+    fn extend(&mut self, lines: &[&str]) {
+        let mut cutter = Cutter::of(&self.schema);
+        let n = self.schema.columns.len();
+        let missing = self.schema.style.missing.clone();
+        let mut spans = Vec::new();
+        let mut widest = 0;
+
+        for line in lines {
+            if line.starts_with('#') {
+                self.interludes.push((self.rows.len(), line.to_string()));
+                continue;
+            }
+
+            cutter.cut(line.as_bytes(), &mut spans);
+            let cells: Vec<Text> = spans
+                .iter()
+                .map(|span| {
+                    let text = &line[span.start..span.end];
+                    Text {
+                        text: text.to_string(),
+                        align: match span.right {
+                            true => Align::Right,
+                            false => Align::Left,
+                        },
+                        missing: text == missing,
+                    }
+                })
+                .collect();
+            widest = widest.max(cells.last().map_or(0, Text::width));
+            self.rows.push(Row { cells });
+        }
+
+        // under no rule nothing but the rows says how wide the
+        // last column is, and a sole column under Absorb takes
+        // the marker's width too
+        let last = &mut self.schema.columns[n - 1];
+        if self.schema.style.rule == Rule::None && !last.ragged {
+            let marker = match n == 1 && self.schema.style.marker == Marker::Absorb {
+                true => MARKER.len(),
+                false => 0,
+            };
+            last.min_width = last.min_width.max(widest + marker);
+        }
     }
 
     /// Read the table at `path`, as [`parse`](Self::parse) reads text.
@@ -937,36 +999,112 @@ fn trimmed(line: &[u8], start: usize, end: usize) -> (usize, usize) {
 /// characters in, and give back how many cells the line reaches, or `None`
 /// if the spans, laid out at `widths` as [`line`] lays a row out, are not the
 /// line again, padding at the end aside.
-pub(crate) fn cut_row(
+fn cut_row(
     line: &[u8],
     open: usize,
     widths: &[usize],
     ragged: &[bool],
     spans: &mut Vec<Span>,
 ) -> Option<usize> {
-    if let Some(reached) = cut_plain_row(line, open, widths, ragged, spans) {
-        return Some(reached);
-    }
     match line.is_ascii() {
         true => cut_row_as::<true>(line, open, widths, ragged, spans),
         false => cut_row_as::<false>(line, open, widths, ragged, spans),
     }
 }
 
+/// Where each run of bytes that are not spaces starts and ends in a line, and
+/// where its bytes outside ASCII are, one bit a byte.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Masks {
+    high: Vec<u64>,
+    starts: Vec<u64>,
+    ends: Vec<u64>,
+}
+
+impl Masks {
+    fn fill(&mut self, line: &[u8]) {
+        use wide::u8x32;
+
+        self.high.clear();
+        self.starts.clear();
+        self.ends.clear();
+        let spaces = u8x32::from(b' ');
+        // whether the byte before this word is text, which
+        // carries a run across the boundary
+        let mut carry = 0;
+        for word in line.chunks(64) {
+            let (mut space, mut high) = (0, 0);
+            for (half, chunk) in word.chunks(32).enumerate() {
+                let bytes: [u8; 32] = match chunk.try_into() {
+                    Ok(bytes) => bytes,
+                    Err(_) => {
+                        let mut bytes = [b' '; 32];
+                        bytes[..chunk.len()].copy_from_slice(chunk);
+                        bytes
+                    }
+                };
+                let v = u8x32::from(bytes);
+                space |= u64::from(v.simd_eq(spaces).to_bitmask()) << (half * 32);
+                high |= u64::from(v.to_bitmask()) << (half * 32);
+            }
+            if word.len() < 64 {
+                space |= !0 << word.len();
+            }
+            let text = !space;
+            let before = text << 1 | carry;
+            self.starts.push(text & !before);
+            self.ends.push(space & before);
+            carry = text >> 63;
+            self.high.push(high);
+        }
+        // a run the line ends inside ends at its end
+        self.ends.push(carry);
+    }
+}
+
+/// The set bits of a mask, lowest first, as byte positions.
+struct Bits<'a> {
+    words: &'a [u64],
+    i: usize,
+    word: u64,
+}
+
+impl<'a> Bits<'a> {
+    fn new(words: &'a [u64]) -> Bits<'a> {
+        Bits {
+            words,
+            i: 0,
+            word: words.first().copied().unwrap_or(0),
+        }
+    }
+
+    fn next(&mut self) -> Option<usize> {
+        while self.word == 0 {
+            self.i += 1;
+            self.word = *self.words.get(self.i)?;
+        }
+        let at = self.word.trailing_zeros() as usize;
+        self.word &= self.word - 1;
+        Some(self.i * 64 + at)
+    }
+}
+
 /// Cut a row every cell of which is left-aligned text, padded with spaces to
 /// its column's width or running past it, or `None` for any other row, or
 /// for text outside ASCII in any cell but the last. A row this takes,
-/// [`cut_row_as`] cuts into the same spans.
+/// [`cut_row`] cuts into the same spans.
 //
-// scanning each cell to its next space, as a split on
-// whitespace does, is most of the cost of reading a row, so
-// the rows a stream writes are spared the general cut
+// each cell comes down to arithmetic on where the runs of
+// text start and end: it starts where the widths put it,
+// and a run starting anywhere in its padding would be the
+// next run, so the padding is never scanned
 fn cut_plain_row(
     line: &[u8],
     open: usize,
     widths: &[usize],
     ragged: &[bool],
     spans: &mut Vec<Span>,
+    masks: &mut Masks,
 ) -> Option<usize> {
     let n = widths.len();
     spans.clear();
@@ -977,17 +1115,27 @@ fn cut_plain_row(
             .rev()
             .take_while(|b| b.is_ascii_whitespace())
             .count();
-    if written < open || line[..open].iter().any(|&b| b != b' ') {
+    if written < open {
         return None;
     }
+    masks.fill(&line[..written]);
+    let mut starts = Bits::new(&masks.starts);
+    let mut ends = Bits::new(&masks.ends);
 
     let mut pos = open;
     for k in 0..n {
-        if pos >= written || line[pos] == b' ' {
+        // the cell has to start where the widths put it, which
+        // also says the bytes before it are all spaces
+        if starts.next()? != pos {
             return None;
         }
 
         if k + 1 == n {
+            // a width counts characters, which are bytes only in
+            // ASCII. the last column is held to no width
+            if any_before(&masks.high, pos) {
+                return None;
+            }
             spans.push(Span {
                 start: pos,
                 end: written,
@@ -996,27 +1144,12 @@ fn cut_plain_row(
             return Some(n);
         }
 
-        // a width counts characters, which are bytes only in
-        // ASCII. the last column is held to no width
-        let len = line[pos..written]
-            .iter()
-            .position(|&b| b == b' ' || !b.is_ascii())
-            .unwrap_or(written - pos);
-        let end = pos + len;
-        if end < written && line[end] != b' ' {
-            return None;
-        }
-        let next = match ragged[k] || len >= widths[k] {
+        let end = ends.next()?;
+        let next = match ragged[k] || end - pos >= widths[k] {
             true => end,
-            false => {
-                let padded = pos + widths[k];
-                if padded > written || line[end..padded].iter().any(|&b| b != b' ') {
-                    return None;
-                }
-                padded
-            }
+            false => pos + widths[k],
         };
-        if next >= written || line[next] != b' ' {
+        if next >= written {
             return None;
         }
 
@@ -1029,6 +1162,15 @@ fn cut_plain_row(
     }
 
     Some(n)
+}
+
+/// Whether any bit of `mask` below `to` is set.
+fn any_before(mask: &[u64], to: usize) -> bool {
+    let whole = to / 64;
+    mask[..whole.min(mask.len())].iter().any(|&word| word != 0)
+        || mask
+            .get(whole)
+            .is_some_and(|&word| !to.is_multiple_of(64) && word & (!0 >> (64 - to % 64)) != 0)
 }
 
 // an ASCII row's characters are its bytes, which spares
@@ -1135,6 +1277,47 @@ fn cut_row_as<const ASCII: bool>(
     }
 
     (at == written).then_some(reached)
+}
+
+/// How many rows the search for ragged columns is run over, when a table has
+/// more. The rest are cut with the answer it gives.
+//
+// the search costs about a millisecond a row on a table of
+// 17 columns, where cutting a row costs about 100 ns
+pub(crate) const SAMPLE: usize = 64;
+
+/// What cutting a row needs to know once a table's header and first rows
+/// have settled it.
+#[derive(Clone, Debug)]
+pub(crate) struct Cutter {
+    widths: Vec<usize>,
+    ragged: Vec<bool>,
+    open: usize,
+    masks: Masks,
+}
+
+impl Cutter {
+    pub(crate) fn of(schema: &Schema) -> Cutter {
+        Cutter {
+            widths: schema.columns.iter().map(|c| c.min_width).collect(),
+            ragged: schema.columns.iter().map(|c| c.ragged).collect(),
+            open: match schema.style.marker {
+                Marker::Absorb => 0,
+                Marker::Indent => INDENT.len(),
+            },
+            masks: Masks::default(),
+        }
+    }
+
+    /// Cut `line` into one span per column, by position where the row lays
+    /// out under the rule and on whitespace where it does not, and give back
+    /// how many cells the line reaches.
+    pub(crate) fn cut(&mut self, line: &[u8], spans: &mut Vec<Span>) -> usize {
+        let (open, widths, ragged) = (self.open, &self.widths, &self.ragged);
+        cut_plain_row(line, open, widths, ragged, spans, &mut self.masks)
+            .or_else(|| cut_row(line, open, widths, ragged, spans))
+            .unwrap_or_else(|| split_bytes(line, widths.len(), spans))
+    }
 }
 
 /// Split a row on whitespace as [`split`] does, into `spans`, and give back
