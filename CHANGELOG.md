@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Reader` cuts a row in one pass. A row of left-aligned cells, each padded
+  with spaces to its width or running past it, is scanned to each next space
+  as a split on whitespace would scan it; any other row takes the general
+  cut, which counts characters one by one only when the row is not ASCII. On
+  a table of 3.4 million rows and 17 columns, rows took 0.33 s where they
+  took 0.69 s.
+- `Reader` settles how to cut the rows from the first 64, where it took 256,
+  so opening that table takes 0.06 s rather than 0.21 s.
+
 ## [0.2.0] - 2026-09-25
 
 ### Added

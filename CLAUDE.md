@@ -90,7 +90,7 @@ files: `column.rs` (`Column`,
 `Rule`, `Stack`, `Trailing`), `render.rs` (`Widths`, `Table`, and the line
 laying-out), `stream.rs` (`Stream`), `read.rs` (`Table::parse`, `ParseError`),
 `reader.rs` (`Reader`, `Entry`, `Cells`: a table a line at a time, cut the way
-`parse` cuts its first 256 rows), `lib.rs`.
+`parse` cuts its first 64 rows), `lib.rs`.
 
 `tests/read.rs` holds the reader to what the crate writes: every golden read
 back and rendered to the same bytes, one table per combination of the style's

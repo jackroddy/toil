@@ -896,7 +896,11 @@ pub(crate) struct Span {
 //
 // counts the bytes that open a UTF-8 character, so a row
 // is never validated as text
-fn advance(line: &[u8], from: usize, chars: usize) -> usize {
+fn advance<const ASCII: bool>(line: &[u8], from: usize, chars: usize) -> usize {
+    if ASCII {
+        return (from + chars).min(line.len());
+    }
+
     let mut at = from;
     let mut left = chars;
     while at < line.len() {
@@ -911,8 +915,11 @@ fn advance(line: &[u8], from: usize, chars: usize) -> usize {
     line.len()
 }
 
-fn chars(bytes: &[u8]) -> usize {
-    bytes.iter().filter(|&&b| b & 0xC0 != 0x80).count()
+fn chars<const ASCII: bool>(bytes: &[u8]) -> usize {
+    match ASCII {
+        true => bytes.len(),
+        false => bytes.iter().filter(|&&b| b & 0xC0 != 0x80).count(),
+    }
 }
 
 fn trimmed(line: &[u8], start: usize, end: usize) -> (usize, usize) {
@@ -927,121 +934,207 @@ fn trimmed(line: &[u8], start: usize, end: usize) -> (usize, usize) {
 }
 
 /// Cut a row into spans as [`cut`] cuts it into pieces, starting `open`
-/// characters in, and give back how many cells the line reaches.
-pub(crate) fn cut_bytes(
+/// characters in, and give back how many cells the line reaches, or `None`
+/// if the spans, laid out at `widths` as [`line`] lays a row out, are not the
+/// line again, padding at the end aside.
+pub(crate) fn cut_row(
     line: &[u8],
     open: usize,
     widths: &[usize],
     ragged: &[bool],
     spans: &mut Vec<Span>,
-) -> usize {
-    let n = widths.len();
-    spans.clear();
-    let mut pos = advance(line, 0, open);
-    let mut reached = 0;
-
-    for k in 0..n {
-        if pos >= line.len() {
-            spans.push(Span {
-                start: line.len(),
-                end: line.len(),
-                right: false,
-            });
-            continue;
-        }
-        reached += 1;
-
-        if k + 1 == n {
-            let (start, end) = trimmed(line, pos, line.len());
-            spans.push(Span {
-                start,
-                end,
-                right: !ragged[k] && line[pos] == b' ' && start < end,
-            });
-            break;
-        }
-
-        let end = advance(line, pos, widths[k]);
-        let fills = end >= line.len() || line[end] == b' ';
-        let (start, stop) = trimmed(line, pos, end);
-        let spaced = line[start..stop].contains(&b' ');
-
-        match !ragged[k] && fills && !spaced {
-            true => {
-                spans.push(Span {
-                    start,
-                    end: stop,
-                    right: line[pos] == b' ' && start < stop,
-                });
-                pos = end + 1;
-            }
-            false => {
-                let len = line[pos..].iter().take_while(|&&b| b != b' ').count();
-                spans.push(Span {
-                    start: pos,
-                    end: pos + len,
-                    right: false,
-                });
-                pos += len + 1;
-            }
-        }
+) -> Option<usize> {
+    if let Some(reached) = cut_plain_row(line, open, widths, ragged, spans) {
+        return Some(reached);
     }
-
-    reached
+    match line.is_ascii() {
+        true => cut_row_as::<true>(line, open, widths, ragged, spans),
+        false => cut_row_as::<false>(line, open, widths, ragged, spans),
+    }
 }
 
-/// Whether `spans`, laid out at `widths` as [`line`] lays a row out, are
-/// `line` again, padding at the end aside.
-pub(crate) fn lays_out(
+/// Cut a row every cell of which is left-aligned text, padded with spaces to
+/// its column's width or running past it, or `None` for any other row, or
+/// for text outside ASCII in any cell but the last. A row this takes,
+/// [`cut_row_as`] cuts into the same spans.
+//
+// scanning each cell to its next space, as a split on
+// whitespace does, is most of the cost of reading a row, so
+// the rows a stream writes are spared the general cut
+fn cut_plain_row(
     line: &[u8],
     open: usize,
     widths: &[usize],
     ragged: &[bool],
-    spans: &[Span],
-) -> bool {
-    let end = line.len()
+    spans: &mut Vec<Span>,
+) -> Option<usize> {
+    let n = widths.len();
+    spans.clear();
+
+    let written = line.len()
         - line
             .iter()
             .rev()
             .take_while(|b| b.is_ascii_whitespace())
             .count();
-    let written = &line[..end];
+    if written < open || line[..open].iter().any(|&b| b != b' ') {
+        return None;
+    }
 
-    // spaces are owed until text follows them, as a stream
-    // writes them, so padding a line ends on is not needed
+    let mut pos = open;
+    for k in 0..n {
+        if pos >= written || line[pos] == b' ' {
+            return None;
+        }
+
+        if k + 1 == n {
+            spans.push(Span {
+                start: pos,
+                end: written,
+                right: false,
+            });
+            return Some(n);
+        }
+
+        // a width counts characters, which are bytes only in
+        // ASCII. the last column is held to no width
+        let len = line[pos..written]
+            .iter()
+            .position(|&b| b == b' ' || !b.is_ascii())
+            .unwrap_or(written - pos);
+        let end = pos + len;
+        if end < written && line[end] != b' ' {
+            return None;
+        }
+        let next = match ragged[k] || len >= widths[k] {
+            true => end,
+            false => {
+                let padded = pos + widths[k];
+                if padded > written || line[end..padded].iter().any(|&b| b != b' ') {
+                    return None;
+                }
+                padded
+            }
+        };
+        if next >= written || line[next] != b' ' {
+            return None;
+        }
+
+        spans.push(Span {
+            start: pos,
+            end,
+            right: false,
+        });
+        pos = next + 1;
+    }
+
+    Some(n)
+}
+
+// an ASCII row's characters are its bytes, which spares
+// counting them one at a time
+fn cut_row_as<const ASCII: bool>(
+    line: &[u8],
+    open: usize,
+    widths: &[usize],
+    ragged: &[bool],
+    spans: &mut Vec<Span>,
+) -> Option<usize> {
+    let n = widths.len();
+    spans.clear();
+    let mut pos = advance::<ASCII>(line, 0, open);
+    let mut reached = 0;
+
+    let written = line.len()
+        - line
+            .iter()
+            .rev()
+            .take_while(|b| b.is_ascii_whitespace())
+            .count();
+
+    // the check that the row lays out again, run as each cell
+    // is cut: spaces are owed until text follows them, as a
+    // stream writes them, so padding a line ends on is not
+    // needed
     let mut at = 0;
     let mut pending = open;
-    for (k, span) in spans.iter().enumerate() {
+
+    for k in 0..n {
+        reached += usize::from(pos < line.len());
+        let span = match pos >= line.len() {
+            true => Span {
+                start: line.len(),
+                end: line.len(),
+                right: false,
+            },
+            false if k + 1 == n => {
+                let (start, end) = trimmed(line, pos, line.len());
+                Span {
+                    start,
+                    end,
+                    right: !ragged[k] && line[pos] == b' ' && start < end,
+                }
+            }
+            false => {
+                let end = advance::<ASCII>(line, pos, widths[k]);
+                let fills = end >= line.len() || line[end] == b' ';
+                let (start, stop) = trimmed(line, pos, end);
+                let spaced = line[start..stop].contains(&b' ');
+
+                match !ragged[k] && fills && !spaced {
+                    true => {
+                        let span = Span {
+                            start,
+                            end: stop,
+                            right: line[pos] == b' ' && start < stop,
+                        };
+                        pos = end + 1;
+                        span
+                    }
+                    false => {
+                        let len = line[pos..].iter().take_while(|&&b| b != b' ').count();
+                        let span = Span {
+                            start: pos,
+                            end: pos + len,
+                            right: false,
+                        };
+                        pos += len + 1;
+                        span
+                    }
+                }
+            }
+        };
+
         if k > 0 {
             pending += 1;
         }
-
         let text = &line[span.start..span.end];
         let pad = match ragged[k] {
             true => 0,
-            false => widths[k].saturating_sub(chars(text)),
+            false => widths[k].saturating_sub(chars::<ASCII>(text)),
         };
         if span.right {
             pending += pad;
         }
-
         if !text.is_empty() {
-            let spaced = written
-                .get(at..at + pending)
-                .is_some_and(|gap| gap.iter().all(|&b| b == b' '));
-            if !spaced || !written[at + pending..].starts_with(text) {
-                return false;
+            let from = at + pending;
+            let laid = from + text.len() <= written
+                && line[at..from].iter().all(|&b| b == b' ')
+                && (span.start == from || &line[from..from + text.len()] == text);
+            if !laid {
+                return None;
             }
-            at += pending + text.len();
+            at = from + text.len();
             pending = 0;
         }
-
         if !span.right {
             pending += pad;
         }
+
+        spans.push(span);
     }
 
-    at == written.len()
+    (at == written).then_some(reached)
 }
 
 /// Split a row on whitespace as [`split`] does, into `spans`, and give back

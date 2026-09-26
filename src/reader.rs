@@ -4,12 +4,16 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 
 use crate::meta::MetaRow;
-use crate::read::{ParseError, Span, cut_bytes, lays_out, split_bytes};
+use crate::read::{ParseError, Span, cut_row, split_bytes};
 use crate::render::{INDENT, Table};
 use crate::style::Marker;
 
 /// How many rows are held back to settle how the rest are cut.
-const SAMPLE: usize = 256;
+//
+// the search over them costs about a millisecond a row on
+// a table of 17 columns, and this is what every file pays
+// before its first row
+const SAMPLE: usize = 64;
 
 /// A table read a line at a time.
 ///
@@ -176,22 +180,16 @@ impl<R: BufRead> Reader<R> {
             return Ok(Some((self.line, entry)));
         }
 
-        let reached = cut_bytes(
+        let cut = cut_row(
             &self.buf,
             self.open,
             &self.widths,
             &self.ragged,
             &mut self.spans,
         );
-        let reached = match lays_out(
-            &self.buf,
-            self.open,
-            &self.widths,
-            &self.ragged,
-            &self.spans,
-        ) {
-            true => reached,
-            false => split_bytes(&self.buf, self.widths.len(), &mut self.spans),
+        let reached = match cut {
+            Some(reached) => reached,
+            None => split_bytes(&self.buf, self.widths.len(), &mut self.spans),
         };
 
         let cells = Cells {
