@@ -89,14 +89,15 @@ files: `column.rs` (`Column`,
 `Format`, `Schema`), `cell.rs` (`Cell`, `Row`, `Align`), `style.rs` (`Marker`,
 `Rule`, `Stack`, `Trailing`), `render.rs` (`Widths`, `Table`, and the line
 laying-out), `stream.rs` (`Stream`), `read.rs` (`Table::parse`, `ParseError`),
-`reader.rs` (`Reader`, `Entry`, `Cells`: a table a line at a time, cut the way
-`parse` cuts its first 64 rows), `lib.rs`.
+`reader.rs` (`Reader`, `Entry`, `Cells`: a table a line at a time, split the
+way `parse` splits it), `lib.rs`.
 
-`tests/read.rs` holds the reader to what the crate writes: every golden read
-back and rendered to the same bytes, one table per combination of the style's
-axes, and 5000 random tables from a fixed seed. Each of those also goes
+`tests/read.rs` holds the reader to what the crate writes: the cells, labels
+and `#` lines of every golden, one table per combination of the style's
+axes, 5000 random tables from a fixed seed, and 3000 more with `min_width`
+columns, more columns and now and then many rows. Each of those also goes
 through `Reader`, which has to give the same cells and comments.
-`tests/reader.rs` reads a 1000-row `Stream` table past the sample.
+`tests/reader.rs` reads a 1000-row `Stream` table.
 
 `tests/golden.rs` holds seven tables the surveyed projects write today, with
 their expected text embedded rather than read from those repositories. Between
@@ -276,27 +277,23 @@ Settled 2026-09-07. Full design in
 - **A reader, for everything the crate writes.** Reversed on 2026-09-24, when
   nail-benchmarks dropped its own table module and needed a parser to read
   `set.tbl`, `ledger.tbl` and michi's manifest. The parser goes here because it
-  is generic to any table `toil` writes. `Table::parse` recovers the cells by
-  position, and the style, labels and column widths with them, so a parsed
-  table renders back to the text it came from. Two settled cases where two
-  tables used to write the same bytes:
-  - A comment directly above the header looked like the top line of a stacked
-    label. `Table` and `Stream` now write a bare `#` between them. That is the
-    only change to output, and no golden has such a comment.
-  - A cell holding the placeholder reads back as missing.
+  is generic to any table `toil` writes.
 
-  Which columns are ragged, and with no rows which marker was used, are not
-  written down, so the reader searches for the answer that lays the text out
-  again exactly, and tries every answer for tables of 12 columns or fewer when
-  the search misses. Some tables still cannot be told apart from their bytes:
-  an empty word inside a stacked label, an empty last column ruled zero wide,
-  an empty cell in a ragged column, a label or a non-last cell with a space in
-  it, and rarely a stacked label over ragged columns (about 1 in 2500 random
-  tables). The reader then returns a table that renders the same bytes.
+  Reading is for the data: the cells, the labels, the `#` lines, and the
+  widths where a dashed rule records them. **It is not for rebuilding the
+  writer's style**, and a parsed table need not render the text it came
+  from. Jack never wanted that; an earlier session wrote it in here as a
+  goal, and the search it needed was removed on 2026-09-26.
 
-  Rows that do not sit under the rule even at its own widths are split on
-  whitespace. That is for other writers: michi's manifest drifts a column off
-  its rule in places, and nail-benchmarks reads it through `Table::parse`.
+  A row is split on spaces, the last column taking the rest of the line, so
+  alignment, raggedness, overruns and the marker do not matter to it, and a
+  row that drifts off its rule reads the same. A header word belongs to the
+  column it sits in: a dashed rule gives each column's start, and with a
+  solid rule or none the header words themselves do. The writer keeps both
+  exact: an empty cell is written as the placeholder, a ragged column's
+  header words are padded to its label, and a bare `#` goes between a
+  comment and the header below it. What a split cannot read is a space in a
+  cell before the last column, which the format does not allow.
 - **Dependencies are allowed.** The crate started with none. Since 2026-09-25
   Jack allows them where they earn their place, starting with `wide` for
   portable SIMD in the reader. Still prefer the standard library when it

@@ -92,7 +92,8 @@ impl Column {
         self
     }
 
-    /// Never pad this column, and rule it to the width of its label.
+    /// Never pad this column's cells, and write its header and rule to the
+    /// width of its label.
     ///
     /// The columns after it line up only across rows whose cells here are the
     /// same width, and only in the last column may a cell hold a space.

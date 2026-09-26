@@ -173,16 +173,23 @@ pub struct Line<'a, W: Write> {
 }
 
 impl<'a, W: Write> Line<'a, W> {
-    /// Write a cell's text.
+    /// Write a cell's text, or the placeholder where it is empty.
     pub fn text(&mut self, text: &str) -> std::io::Result<&mut Self> {
+        if text.is_empty() {
+            return self.missing();
+        }
         self.put(text.as_bytes(), text.chars().count(), None)?;
         Ok(self)
     }
 
-    /// Write a cell that is already bytes, one column per byte.
+    /// Write a cell that is already bytes, one column per byte, or the
+    /// placeholder where it is empty.
     ///
     /// Padding is by length, so this is for text of one byte per character.
     pub fn bytes(&mut self, text: &[u8]) -> std::io::Result<&mut Self> {
+        if text.is_empty() {
+            return self.missing();
+        }
         self.put(text, text.len(), None)?;
         Ok(self)
     }

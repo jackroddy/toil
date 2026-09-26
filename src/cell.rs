@@ -46,10 +46,16 @@ impl Cell {
     }
 
     pub(crate) fn resolve(self, column: &Column, style: &Style) -> Text {
-        let missing = self.value == Value::Missing;
+        // an empty cell is written as the placeholder, since a row is
+        // read back by splitting on spaces and would lose it
+        let missing = match &self.value {
+            Value::Missing => true,
+            Value::Text(text) => text.is_empty(),
+            _ => false,
+        };
         let align = self.align.unwrap_or(column.align);
         let text = match self.value {
-            Value::Text(text) => text,
+            Value::Text(text) if !text.is_empty() => text,
             _ => {
                 let mut text = String::new();
                 self.write(column, style, &mut text);
@@ -69,7 +75,8 @@ impl Cell {
     pub(crate) fn write(&self, column: &Column, style: &Style, out: &mut String) -> Align {
         out.clear();
         match &self.value {
-            Value::Text(text) => out.push_str(text),
+            Value::Text(text) if !text.is_empty() => out.push_str(text),
+            Value::Text(_) => out.push_str(&style.missing),
             Value::Num(n) => column.format.write(*n, out),
             Value::Num32(n) => column.format.write(*n, out),
             Value::Int(n) => write_int(*n, out),

@@ -228,6 +228,21 @@ pub(crate) fn head(schema: &Schema, widths: &Widths) -> String {
             .collect();
 
         let open = mark(schema, &mut cells);
+
+        // a ragged column's rows are unpadded, but its header words are
+        // padded to its label, as its rule is, so every word on every
+        // header line starts where its column does
+        for (i, cell) in cells.iter_mut().enumerate() {
+            if schema.is_ragged(i) {
+                let marker = match i == 0 && schema.style.marker == Marker::Absorb {
+                    true => MARKER.len(),
+                    false => 0,
+                };
+                let width = schema.columns[i].label_width() + marker;
+                let pad = width.saturating_sub(cell.text.chars().count());
+                cell.text.extend(std::iter::repeat_n(' ', pad));
+            }
+        }
         out.push_str(&line(schema, widths, open, &cells));
     }
 

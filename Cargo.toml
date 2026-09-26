@@ -11,5 +11,9 @@ keywords = ["table", "tabular", "align", "format"]
 readme = "README.md"
 exclude = ["CLAUDE.md"]
 
+[features]
+default = ["simd"]
+simd = ["dep:wide"]
+
 [dependencies]
-wide = "1.7.1"
+wide = { version = "1.7.1", optional = true }

@@ -4,18 +4,17 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 
 use crate::meta::MetaRow;
-use crate::read::{Cutter, ParseError, SAMPLE, Span};
+use crate::read::{Masks, ParseError, Span, split};
 use crate::render::Table;
 
 /// A table read a line at a time.
 ///
-/// The header and the first rows settle how every row is cut, as
-/// [`Table::parse`] would cut them; a row that does not lay out under the rule
-/// is split on whitespace instead. Only `#` lines are checked as UTF-8.
+/// Each row is split on spaces, as [`Table::parse`] splits it, the last
+/// column taking the rest of the line. Only `#` lines are checked as UTF-8.
 pub struct Reader<R: BufRead> {
     input: R,
     header: Table,
-    cutter: Cutter,
+    masks: Masks,
 
     /// Lines read to settle the header and not yet handed out.
     sample: VecDeque<Vec<u8>>,
@@ -70,27 +69,21 @@ impl<R: BufRead> Reader<R> {
     pub fn new(mut input: R) -> std::io::Result<Reader<R>> {
         let mut lead = Vec::new();
         let mut sample = VecDeque::new();
-        let mut rows = 0;
 
+        // the first row is held back too, since it is what says which
+        // marker the rows are written with
         loop {
             let mut buf = Vec::new();
             if !next_line(&mut input, &mut buf)? {
                 break;
             }
-            match sample.is_empty() && buf.starts_with(b"#") {
-                true => {
-                    let text = String::from_utf8(buf)
-                        .map_err(|_| invalid(lead.len() + 1, "the line is not UTF-8"))?;
-                    lead.push(text);
-                }
-                false => {
-                    rows += usize::from(!buf.starts_with(b"#"));
-                    sample.push_back(buf);
-                    if rows == SAMPLE {
-                        break;
-                    }
-                }
+            if !buf.starts_with(b"#") {
+                sample.push_back(buf);
+                break;
             }
+            let text = String::from_utf8(buf)
+                .map_err(|_| invalid(lead.len() + 1, "the line is not UTF-8"))?;
+            lead.push(text);
         }
 
         let mut text = lead.join("\n");
@@ -98,6 +91,8 @@ impl<R: BufRead> Reader<R> {
             text.push('\n');
             text.push_str(&String::from_utf8_lossy(line));
         }
+        // lines() drops an empty last line, and an empty row is one
+        text.push('\n');
         let mut header = Table::parse(&text)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
@@ -114,11 +109,10 @@ impl<R: BufRead> Reader<R> {
         header.rows.clear();
         header.interludes.clear();
 
-        let cutter = Cutter::of(&header.schema);
         Ok(Reader {
             input,
             header,
-            cutter,
+            masks: Masks::default(),
             sample,
             buf: Vec::new(),
             spans: Vec::new(),
@@ -161,7 +155,8 @@ impl<R: BufRead> Reader<R> {
             return Ok(Some((self.line, entry)));
         }
 
-        let reached = self.cutter.cut(&self.buf, &mut self.spans);
+        let n = self.header.schema.columns.len();
+        let reached = split(&self.buf, n, &mut self.spans, &mut self.masks);
 
         let cells = Cells {
             line: &self.buf,

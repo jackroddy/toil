@@ -9,33 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `Table::parse` on a text of more than 64 rows searches the first 64 for
-  which columns are ragged and cuts the rest with that answer, as `Reader`
-  does. The search costs about 0.9 ms a row on a table of 17 columns, and
-  parse used to run it over every row: 10,000 rows took 9.3 s and now take
-  0.065 s, and 100,000 rows take 0.11 s. On such a text, a row that does not
-  lay out under the rule is split on whitespace alone, rather than every
-  row.
-- `Reader` finds where the runs of text in a row start and end with SIMD,
-  through `wide`, and cuts a row of left-aligned cells from those
-  positions without scanning the padding. Reading 3.4 million rows (429 MB)
-  takes 0.34 s where it took 0.39 to 0.41 s: 1.26 GB/s where it was 1.08.
+- `Table::parse` and `Reader` split each row on spaces, the last column
+  taking the rest of the line, and give each header word to the column it
+  sits in. They no longer search for which columns are ragged, sample the
+  first rows, or cut rows by position. Reading gives back the cells, the
+  labels and the `#` lines, and the widths where a dashed rule records
+  them. It no longer recovers the writer's style, so a parsed table need
+  not render the text it came from.
+- A cell holding an empty string, including `Line::text("")` and
+  `Line::bytes(b"")`, is written as the placeholder and reads back as
+  missing, since a split would lose it.
+- A ragged column's header words are padded to its label's width, as its
+  rule already was, so every header word starts where its column does.
+- A row with fewer cells than columns reads the rest as missing, where
+  they read as empty.
 - `Stream::row` writes each cell straight into the stream, as `Line` does,
-  rather than building the whole line first. Writing a million rows of 17
-  cells takes 0.68 s where it took 0.90 s. Under `Trailing::Trim`, a last
+  rather than building the whole line first. Under `Trailing::Trim`, a last
   cell whose own text ends in spaces now keeps them, as `Line` already did.
-- `toil` depends on `wide`.
+- `toil` depends on `wide`, behind a `simd` feature that is on by default,
+  to find the spaces in a row. Without it they are found eight bytes at a
+  time in a `u64`, and the crate has no dependencies.
 
 ### Fixed
 
-- `Table::parse` and `Reader::new` took time growing with about the fourth
-  power of the column count on a table with no answer the search counts as
-  perfect, such as one with columns set wider than their labels and cells:
-  80 columns took 2.6 s and 164 columns over 30 s. The search now weighs
-  only sets of columns that start at or before where the rows or header go
-  wrong, stops growing a set once one explains every line, and then
-  settles the tie a column at a time. 164 columns and 1,000 rows open in
-  0.29 s.
+- Opening a table no longer takes time growing with its column count, and
+  a table whose rows drift off the rule, such as one from another writer,
+  no longer takes seconds to parse or fails to. Both came from the search
+  for ragged columns, which is gone.
 
 ## [0.2.1] - 2026-09-25
 

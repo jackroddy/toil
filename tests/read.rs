@@ -4,10 +4,13 @@ use toil::{
     Align, Cell, Column, Entry, Marker, Reader, Rule, Schema, Stack, Stream, Style, Table, Trailing,
 };
 
-/// Parse `text`, render what came back, and hold the two to each other.
+/// Parse `text`, and hold what came back to what a render of it reads back
+/// as, and to what a [`Reader`] makes of the text.
 fn round_trip(text: &str) -> Table {
     let table = Table::parse(text).unwrap_or_else(|e| panic!("{e}\n{text}"));
-    assert_eq!(table.render(), text, "rendered back differently");
+    let again = Table::parse(&table.render()).unwrap();
+    assert_eq!(again.labels(), table.labels(), "{text}");
+    assert_eq!(cells(&again), cells(&table), "{text}");
     read_alike(text, &table, text);
     table
 }
@@ -173,11 +176,11 @@ fn a_comment_with_no_separator_is_preamble() {
 }
 
 #[test]
-fn a_short_row_reads_its_tail_as_empty() {
+fn a_short_row_reads_its_tail_as_missing() {
     let back = Table::parse("# name tool shard\n# ---- ---- -----\n  a    nail\n").unwrap();
 
     assert_eq!(back.rows()[0].get(1), Some("nail"));
-    assert_eq!(back.rows()[0].get(2), Some(""));
+    assert_eq!(back.rows()[0].get(2), None);
 }
 
 #[test]
@@ -344,7 +347,6 @@ fn check(style: Style, ragged: Option<usize>) {
     let back = Table::parse(&text).unwrap_or_else(|e| panic!("{e}\n{context}"));
     read_alike(&text, &back, &context);
 
-    assert_eq!(back.render(), text, "rendered back differently: {context}");
     assert_eq!(
         back.labels(),
         ["name", "cell count", "score", "the last one"],
@@ -367,7 +369,8 @@ fn check(style: Style, ragged: Option<usize>) {
         [
             [s("alpha"), s("3"), s("1.50"), s("x")],
             [s("a-rather-longer-name"), None, s("12.25"), s("two words")],
-            [s("b"), s(""), None, s("")],
+            // an empty cell is written as the placeholder
+            [s("b"), None, None, None],
         ],
         "{context}"
     );
@@ -402,8 +405,24 @@ impl Lcg {
 #[test]
 fn random_tables_read_back() {
     let mut rng = Lcg(7);
-
     for case in 0..5000 {
+        random_table(&mut rng, case, false);
+    }
+}
+
+/// Random tables with columns set wider than their labels and cells, more
+/// columns, and now and then many rows.
+#[test]
+fn wider_random_tables_read_back() {
+    let mut rng = Lcg(8);
+    for case in 0..3000 {
+        random_table(&mut rng, case, true);
+    }
+}
+
+/// Write a table at random, read it back, and hold the two to each other.
+fn random_table(rng: &mut Lcg, case: usize, wider: bool) {
+    {
         let rule = [Rule::Dashes, Rule::Solid, Rule::None][rng.below(3) as usize];
         let style = Style::default()
             .marker([Marker::Absorb, Marker::Indent][rng.below(2) as usize])
@@ -411,7 +430,7 @@ fn random_tables_read_back() {
             .stack([Stack::Bottom, Stack::Top][rng.below(2) as usize])
             .trailing([Trailing::Trim, Trailing::Keep][rng.below(2) as usize]);
 
-        let n = 1 + rng.below(5) as usize;
+        let n = 1 + rng.below(if wider { 8 } else { 5 }) as usize;
         let mut labels = Vec::new();
         let mut raggeds = Vec::new();
         let columns: Vec<Column> = (0..n)
@@ -438,6 +457,9 @@ fn random_tables_read_back() {
                 if rng.below(3) == 0 {
                     column = column.align(Align::Right);
                 }
+                if wider && rng.below(3) == 0 {
+                    column = column.min_width(rng.below(9) as usize);
+                }
                 column
             })
             .collect();
@@ -450,7 +472,11 @@ fn random_tables_read_back() {
                 _ => table.comment(rng.word(8)),
             };
         }
-        for _ in 0..rng.below(6) {
+        let rows = match wider && rng.below(10) == 0 {
+            true => 65 + rng.below(136),
+            false => rng.below(6),
+        };
+        for _ in 0..rows {
             let mut row = Vec::new();
             let mut want = Vec::new();
             for (k, &ragged) in raggeds.iter().enumerate() {
@@ -471,7 +497,9 @@ fn random_tables_read_back() {
                             true => rng.word(8) + "w",
                             false => rng.word(9),
                         };
-                        (Cell::from(text.clone()), Some(text))
+                        // an empty cell is written as the placeholder
+                        let want = Some(text.clone()).filter(|t| !t.is_empty());
+                        (Cell::from(text), want)
                     }
                 };
                 let cell = match rng.below(8) {
@@ -494,7 +522,6 @@ fn random_tables_read_back() {
         let back = Table::parse(&text).unwrap_or_else(|e| panic!("{e}\n{context}"));
         read_alike(&text, &back, &context);
 
-        assert_eq!(back.render(), text, "rendered back differently, {context}");
         assert_eq!(back.labels(), labels, "{context}");
         assert_eq!(cells(&back), expected, "{context}");
     }
