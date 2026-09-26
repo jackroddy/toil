@@ -51,6 +51,11 @@ versioning](https://semver.org/spec/v2.0.0.html). While the crate is below 1.0,
 a breaking change takes the minor number. Tag every release, annotated, as
 `vMAJOR.MINOR.PATCH`, on the commit that was published.
 
+**Breaking changes are fine below 1.0.** When breaking the API gives the better
+design, break it and bump the minor number. Do not bend a design to stay
+additive, and do not hold a break back for sign-off. Name each break under
+Changed or Removed in the changelog, so callers know what to update.
+
 **Formatting.** `rustfmt` is the format. Run `cargo fmt` before committing.
 
 **Changelog.** `CHANGELOG.md` follows [Keep a
