@@ -1,0 +1,28 @@
+{
+  "id": "toil-5b0918",
+  "title": "Tree-tables: nested tables where the nesting means something",
+  "body": "toil also builds tree-tables: a tree of label: value lines, where a node can carry a table of its own and the nesting means something. Vague template from nail:\n\nruntime: 1.77s (100.00%)\n └─ setup:     0.00s ( 0.08%)\n     ├─ query index:      0.00s (23.38%)\n     ├─ target index:     0.00s (12.93%)\n     ├─ pipeline build:   0.00s (62.96%)\n     └─ [misc.]:          0.00s ( 0.73%)\n └─ seeding:   1.63s (92.19%)\n     ├─ db write:      0.00s ( 0.22%)\n     ├─ prefilter:     1.04s (63.78%)\n     ├─ slice:         0.00s ( 0.00%)\n     ├─ align:         0.53s (32.33%)\n     ├─ decide:        0.00s ( 0.02%)\n     ├─ merge:         0.00s ( 0.00%)\n     ├─ convertalis:   0.06s ( 3.62%)\n     ├─ seed index:    0.00s ( 0.01%)\n     └─ [misc.]:       0.00s ( 0.01%)\n └─ alignment: 0.14s ( 7.73%)   [8 threads, cpu 0.50s, 45.3% busy]\n     │                      wall        %     cpu\n     │                     -----   ------   -----\n     ├─ memory init        0.00s    0.99%   0.00s\n     ├─ cloud search       0.06s   46.77%   0.23s\n     ├─ forward            0.02s   16.86%   0.08s\n     ├─ backward           0.03s   20.62%   0.10s\n     ├─ posterior          0.01s    5.60%   0.03s\n     ├─ optimal accuracy   0.01s    4.60%   0.02s\n     ├─ traceback          0.00s    0.60%   0.00s\n     ├─ null two           0.00s    1.61%   0.01s\n     ├─ output (write)     0.00s    0.11%   0.00s\n     ├─ output (mutex)     0.00s    0.00%   0.00s\n     └─ [misc.]            0.00s    2.24%   0.01s\n └─ [misc.]:   0.00s ( 0.00%)",
+  "type": "feature",
+  "status": "open",
+  "priority": 4,
+  "labels": [],
+  "parent": null,
+  "blocked_by": [],
+  "related": [],
+  "assignee": null,
+  "lease_expires": null,
+  "defer_until": null,
+  "created_at": "2026-09-29T01:41:07.24072353Z",
+  "updated_at": "2026-09-29T01:41:07.24072353Z",
+  "closed_at": null,
+  "close_reason": null,
+  "resolution": null,
+  "notes": [],
+  "stamps": {
+    "created": {
+      "commit": "7fe8a81",
+      "branch": "dev"
+    },
+    "closed": null
+  }
+}
