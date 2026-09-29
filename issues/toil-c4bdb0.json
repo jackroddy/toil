@@ -1,0 +1,28 @@
+{
+  "id": "toil-c4bdb0",
+  "title": "Confirm the Decisions section of CLAUDE.md entry by entry",
+  "body": "An earlier Claude session wrote the byte-for-byte round-trip goal into CLAUDE.md as a settled decision, and Jack never wanted it. The rest of the Decisions section reads in the same voice. Go through it with Jack one entry at a time and mark each as his, amended, or dropped.\n\nEntries, as of 0.3.0:\n- name toil (renamed from tabl on 2026-09-25)\n- per-column numeric formatting in scope, unit formatting out\n- rows are untyped\n- streaming is first-class; Stream takes its Widths at construction and never revises them\n- pail's floor generalises, its blocks do not\n- a reader for everything the crate writes, for the data and not the style\n- dependencies are allowed\n- rendering has no error type; reading has ParseError\n\nKnown to be Jack's already: dependencies allowed (commit 3f59694), breaking changes below 1.0 (f39c493), and the reader being for data, not style. The 2026-09-07 entries came out of the first design session and have not been checked.",
+  "type": "decision",
+  "status": "open",
+  "priority": 3,
+  "labels": [],
+  "parent": null,
+  "blocked_by": [],
+  "related": [],
+  "assignee": null,
+  "lease_expires": null,
+  "defer_until": null,
+  "created_at": "2026-09-29T00:56:50.79218889Z",
+  "updated_at": "2026-09-29T00:56:50.79218889Z",
+  "closed_at": null,
+  "close_reason": null,
+  "resolution": null,
+  "notes": [],
+  "stamps": {
+    "created": {
+      "commit": "012039d",
+      "branch": "dev"
+    },
+    "closed": null
+  }
+}
