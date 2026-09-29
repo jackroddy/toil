@@ -1,0 +1,28 @@
+{
+  "id": "toil-062ac4",
+  "title": "Stacked headers written before 0.3.0 read with the bottom line's labels only",
+  "body": "Before 0.3.0 the writer did not pad a ragged column's header words. On an upper line of a stacked header, where that column's word is empty, every word after it sits left of its column. Under a dashed rule the 0.3.0 reader (Head::find, src/read.rs:209-216) requires every header word to start on a rule run, so it takes those lines for preamble. The cells read correctly; the labels come back as the bottom line's words alone.\n\nnail-benchmarks writes runs.tbl in this shape (cloud-search/src/scores/runs.rs:277-294: a ragged query column first, then stacked run names). Its Frame reader rejects a file with no '#= format' line, but a file written by toil 0.2.x has that line and unpadded headers. Nobody has checked whether such files exist on disk. Options: rewrite them with 0.3.0, read them by position, or let the reader accept a word left of its column on an upper line.",
+  "type": "bug",
+  "status": "open",
+  "priority": 2,
+  "labels": [],
+  "parent": null,
+  "blocked_by": [],
+  "related": [],
+  "assignee": null,
+  "lease_expires": null,
+  "defer_until": null,
+  "created_at": "2026-09-29T00:39:27.193193191Z",
+  "updated_at": "2026-09-29T00:39:27.193193191Z",
+  "closed_at": null,
+  "close_reason": null,
+  "resolution": null,
+  "notes": [],
+  "stamps": {
+    "created": {
+      "commit": "012039d",
+      "branch": "dev"
+    },
+    "closed": null
+  }
+}
