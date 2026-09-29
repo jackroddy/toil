@@ -1,0 +1,10 @@
+{
+  "slug": "no-layout-line",
+  "text": "A '#%' line recording the writer's layout was proposed before 0.3.0 so a parsed table could be re-rendered exactly. It was dropped with the re-rendering goal, and nothing in the crate reads or writes one.",
+  "created_at": "2026-09-29T00:39:34.905105195Z",
+  "updated_at": "2026-09-29T00:39:34.905105195Z",
+  "stamp": {
+    "commit": "012039d",
+    "branch": "dev"
+  }
+}
