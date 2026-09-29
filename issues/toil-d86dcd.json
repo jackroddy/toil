@@ -1,0 +1,28 @@
+{
+  "id": "toil-d86dcd",
+  "title": "The marker is guessed from the rows, so Stream::continued can write appended rows two characters off",
+  "body": "Head::schema (src/read.rs:276-280) takes a table as Marker::Indent when every row opens with two spaces; Reader::new decides from the first row. A Marker::Absorb table whose first cells are all right-aligned and shorter than their column reads the same way. The cells read correctly, but a Stream::continued built from the parsed schema, as examples/read.rs:43 does, writes its rows two characters off. Rare, and left open at 0.3.0.",
+  "type": "bug",
+  "status": "open",
+  "priority": 4,
+  "labels": [],
+  "parent": null,
+  "blocked_by": [],
+  "related": [],
+  "assignee": null,
+  "lease_expires": null,
+  "defer_until": null,
+  "created_at": "2026-09-29T00:39:27.213764091Z",
+  "updated_at": "2026-09-29T00:39:27.213764091Z",
+  "closed_at": null,
+  "close_reason": null,
+  "resolution": null,
+  "notes": [],
+  "stamps": {
+    "created": {
+      "commit": "012039d",
+      "branch": "dev"
+    },
+    "closed": null
+  }
+}
