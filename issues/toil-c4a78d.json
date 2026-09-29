@@ -1,0 +1,28 @@
+{
+  "id": "toil-c4a78d",
+  "title": "The writer accepts spaces the reader cannot split",
+  "body": "A cell holding a space in any column but the last reads back wrong, and so does a last cell with a space at either end. The writer accepts both; Cell::resolve only replaces an empty cell with the placeholder. The limit is documented on Column::ragged (src/column.rs:99) and Table::meta, not where cells are built and not in README.md. Reject, replace, or document it at Cell and Line.",
+  "type": "bug",
+  "status": "open",
+  "priority": 3,
+  "labels": [],
+  "parent": null,
+  "blocked_by": [],
+  "related": [],
+  "assignee": null,
+  "lease_expires": null,
+  "defer_until": null,
+  "created_at": "2026-09-29T00:39:27.206974368Z",
+  "updated_at": "2026-09-29T00:39:27.206974368Z",
+  "closed_at": null,
+  "close_reason": null,
+  "resolution": null,
+  "notes": [],
+  "stamps": {
+    "created": {
+      "commit": "012039d",
+      "branch": "dev"
+    },
+    "closed": null
+  }
+}
