@@ -1,0 +1,10 @@
+{
+  "slug": "reader-search-removed",
+  "text": "Before 0.3.0 the reader searched for which columns were ragged, scored candidates by re-rendering, and had a brute-force backstop, stream retries and sampling, all so a parsed table could be re-rendered byte for byte. Commit 880c4c7 replaced that with a split on spaces, the last column taking the rest of the line, and 5bf9223 dropped what only re-rendering had kept. The reader gives back the data; it does not rebuild the writer's style.",
+  "created_at": "2026-09-29T00:39:34.897973164Z",
+  "updated_at": "2026-09-29T00:39:34.897973164Z",
+  "stamp": {
+    "commit": "012039d",
+    "branch": "dev"
+  }
+}
