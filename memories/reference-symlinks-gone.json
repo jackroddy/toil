@@ -1,0 +1,10 @@
+{
+  "slug": "reference-symlinks-gone",
+  "text": "The symlinks nail/, pail/ and nail-benchmarks/ that CLAUDE.md describes are not in the working tree; only .gitignore names them. The siblings live at ../nail and ../nail-benchmarks, and there is no ../pail.",
+  "created_at": "2026-09-29T00:39:40.226093338Z",
+  "updated_at": "2026-09-29T00:39:40.226093338Z",
+  "stamp": {
+    "commit": "012039d",
+    "branch": "dev"
+  }
+}
