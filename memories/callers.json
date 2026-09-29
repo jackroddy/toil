@@ -1,0 +1,10 @@
+{
+  "slug": "callers",
+  "text": "nail-benchmarks depends on toil 0.3.0 from every benchmark crate (its commit 1f03ac5, 2026-09-26) and reads tables through Table::parse, Table::read and Reader; its util crate has no tbl.rs of its own now. michi pins toil 0.1. pail and nail do not depend on toil.",
+  "created_at": "2026-09-29T00:39:40.218739808Z",
+  "updated_at": "2026-09-29T00:39:40.218739808Z",
+  "stamp": {
+    "commit": "012039d",
+    "branch": "dev"
+  }
+}
