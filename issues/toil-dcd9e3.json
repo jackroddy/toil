@@ -1,0 +1,28 @@
+{
+  "id": "toil-dcd9e3",
+  "title": "Time the 0.3.0 reader against 0.2.1 with repeated interleaved runs",
+  "body": "0.3.0's read speed has single-run timings only; CHANGELOG.md gives figures for 0.2.1 and none for 0.3.0. Time both on the same data in one session, interleaved, with min, median and max, and say where a difference is within noise. The 331 GB table has never been timed. The crate has no benches/ directory. CONCERNS.md said the nail-benchmarks benchmark needed its meta calls moved to the 0.2 API first; nail-benchmarks moved to toil 0.3.0 on 2026-09-26 (its commit 1f03ac5), so check whether that still holds.",
+  "type": "chore",
+  "status": "open",
+  "priority": 3,
+  "labels": [],
+  "parent": null,
+  "blocked_by": [],
+  "related": [],
+  "assignee": null,
+  "lease_expires": null,
+  "defer_until": null,
+  "created_at": "2026-09-29T00:39:27.220618955Z",
+  "updated_at": "2026-09-29T00:39:27.220618955Z",
+  "closed_at": null,
+  "close_reason": null,
+  "resolution": null,
+  "notes": [],
+  "stamps": {
+    "created": {
+      "commit": "012039d",
+      "branch": "dev"
+    },
+    "closed": null
+  }
+}
